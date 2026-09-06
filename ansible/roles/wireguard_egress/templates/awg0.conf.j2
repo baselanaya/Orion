@@ -1,0 +1,22 @@
+[Interface]
+# {{ ansible_managed }} — Orion egress node, AmneziaWG-obfuscated (plan v1.3 §5.5)
+# NAT / QUIC-drop / IPv6 policy lives in nftables (table orion_fw), not here.
+Address = {{ orion_vpn_gateway_ip }}/{{ orion_vpn_prefix }}
+ListenPort = {{ orion_wg_port }}
+PrivateKey = {{ orion_server_private_key }}
+MTU = 1420
+Jc = {{ orion_awg_jc }}
+Jmin = {{ orion_awg_jmin }}
+Jmax = {{ orion_awg_jmax }}
+S1 = {{ orion_awg_s1 }}
+S2 = {{ orion_awg_s2 }}
+H1 = {{ orion_awg_h1 }}
+H2 = {{ orion_awg_h2 }}
+H3 = {{ orion_awg_h3 }}
+H4 = {{ orion_awg_h4 }}
+{% for p in orion_peers %}
+# peer: {{ p.name }} ({{ p.mode }} pool)
+[Peer]
+PublicKey = {{ p.pubkey }}
+AllowedIPs = {{ p.ip }}/32
+{% endfor %}

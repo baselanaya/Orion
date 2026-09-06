@@ -1,0 +1,13 @@
+[Interface]
+# {{ ansible_managed }} — egress side of the entry<->egress hop (roadmap 4).
+# Plain WireGuard: this leg carries already-obfuscated client traffic between
+# our own nodes; source addresses are preserved so the egress can classify modes.
+Address = {{ orion_hop_address }}
+ListenPort = {{ orion_hop_port }}
+PrivateKey = {{ orion_hop_private_key }}
+MTU = 1420
+
+[Peer]
+# entry node ({{ orion_hop_peer_name | default('entry') }})
+PublicKey = {{ orion_hop_peer_pub }}
+AllowedIPs = {{ orion_hop_peer_ip }}, 10.66.1.0/24

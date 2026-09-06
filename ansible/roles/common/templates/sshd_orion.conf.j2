@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+# Key-only SSH. During migration both orion_ssh_port and 22 may be listed —
+# close 22 from host_vars once the new port is confirmed working.
+Port {{ orion_ssh_port }}
+{% if orion_ssh_keep_port_22 | bool and orion_ssh_port != 22 %}
+Port 22
+{% endif %}
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin prohibit-password
+X11Forwarding no
+MaxAuthTries 3
+ClientAliveInterval 120

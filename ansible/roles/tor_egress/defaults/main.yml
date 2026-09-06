@@ -1,0 +1,5 @@
+---
+# Tor client on the egress node — the Ghost mode core (plan v1.2 §5.4).
+orion_vpn_gateway_ip: "10.66.0.1"
+# orion_tor_control_hash is supplied from host_vars (generated once via
+# `tor --hash-password`); the plaintext pass lives client-side only.

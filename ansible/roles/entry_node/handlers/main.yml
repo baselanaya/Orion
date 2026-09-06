@@ -1,0 +1,14 @@
+---
+- name: restart orion-awg
+  ansible.builtin.systemd:
+    name: orion-awg
+    state: restarted
+
+- name: restart wg-hop
+  ansible.builtin.systemd:
+    name: wg-quick@wg-hop
+    state: restarted
+
+- name: reload sysctl
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-orion.conf
+  changed_when: false

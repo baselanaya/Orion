@@ -1,0 +1,10 @@
+/target
+client/**/target/
+client/app/src-tauri/gen/
+ansible/*.retry
+ansible/inventory.yml
+ansible/host_vars/*
+!ansible/host_vars/*.example.yml
+*.key
+node_modules/
+.venv/

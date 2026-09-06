@@ -1,0 +1,27 @@
+---
+# Orion — node provisioning (plan v1.3)
+# Run:  ansible-playbook -i inventory.yml site.yml -K
+
+- name: Orion — base hardening (all nodes)
+  hosts: orion_nodes
+  become: true
+  roles:
+    - role: common
+
+- name: Orion — WireGuard egress node (Fast path)
+  hosts: egress
+  become: true
+  roles:
+    - role: wireguard_egress
+
+- name: Orion — Tor egress core (Ghost mode)
+  hosts: egress
+  become: true
+  roles:
+    - role: tor_egress
+
+- name: Orion — entry node (Double/Ghost front)
+  hosts: entry
+  become: true
+  roles:
+    - role: entry_node

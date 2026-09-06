@@ -1,0 +1,69 @@
+---
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - nftables
+      - fail2ban
+      - python3-systemd
+      - openssh-server
+      - procps
+      - unattended-upgrades
+      - wireguard
+      - wireguard-tools
+    state: present
+    update_cache: true
+
+- name: Harden sshd
+  ansible.builtin.template:
+    src: sshd_orion.conf.j2
+    dest: /etc/ssh/sshd_config.d/50-orion.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: restart ssh
+
+- name: Ensure journald drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Keep journald in volatile storage (no persistent logs — plan §5.2)
+  ansible.builtin.template:
+    src: journald_volatile.conf.j2
+    dest: /etc/systemd/journald.conf.d/50-orion-volatile.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart journald
+
+- name: Enable automatic security updates
+  ansible.builtin.template:
+    src: auto-upgrades.conf.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Fail2ban sshd jail
+  ansible.builtin.template:
+    src: fail2ban_orion.conf.j2
+    dest: /etc/fail2ban/jail.d/50-orion.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart fail2ban
+
+- name: Enable fail2ban
+  ansible.builtin.systemd:
+    name: fail2ban
+    enabled: true
+    state: started
+
+- name: Enable unattended-upgrades service
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    enabled: true

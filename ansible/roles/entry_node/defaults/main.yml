@@ -1,0 +1,33 @@
+---
+# Entry node defaults: client-facing AmneziaWG + policy-routed hop.
+orion_ssh_port: 22
+orion_wg_port: 4500
+orion_wg_iface: "awg0"
+orion_vpn_gateway_ip: "10.66.1.1"
+orion_vpn_prefix: 24
+orion_peers: []
+orion_wan_interface: "{{ ansible_default_ipv4.interface | default('eth0') }}"
+
+# AmneziaWG obfuscation parameters — MUST match the egress node's values.
+orion_awg_jc: 4
+orion_awg_jmin: 50
+orion_awg_jmax: 300
+orion_awg_s1: 87
+orion_awg_s2: 42
+orion_awg_h1: "1123214321-1143214321"
+orion_awg_h2: "987654321-997654321"
+orion_awg_h3: "765432109-775432109"
+orion_awg_h4: "654321098-664321098"
+
+# client address pools on the entry (10.66.1.0/24; gateway .1)
+orion_entry_fast: "10.66.1.10-10.66.1.49"
+orion_entry_double: "10.66.1.50-10.66.1.89"
+orion_entry_ghost: "10.66.1.90-10.66.1.129"
+
+# hop to the egress node (plain WireGuard; supplied from host_vars).
+# set orion_hop_endpoint in host_vars/entry-1.yml to your egress address:
+#   orion_hop_private_key - entry-side hop key
+#   orion_hop_peer_pub    - egress-side hop public key
+orion_hop_endpoint: "203.0.113.10:4501"
+orion_hop_address: "10.66.255.1/30"
+orion_hop_fwmark: "4502"

@@ -1,0 +1,19 @@
+[Unit]
+Description=Orion VPN root helper (kill switch + tunnel lifecycle)
+Documentation=file:///opt/orion/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/orion-helper serve
+Restart=always
+RestartSec=2
+# kernel-side nftables rules survive this process; Restart makes the IPC
+# socket come back so the UI can see the degraded `locked_no_tunnel` state.
+RuntimeDirectory=orion
+RuntimeDirectoryMode=0750
+Group=orion
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

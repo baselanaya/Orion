@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+# Plan §5.2: no persistent logs. Journal lives in tmpfs and dies at reboot.
+[Journal]
+Storage=volatile
+SystemMaxUse=50M

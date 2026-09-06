@@ -1,0 +1,117 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed }}
+# Orion node firewall — one authoritative table, idempotent on reload.
+#
+# Phase 1 (Fast path): forward chain NATs the fast pool out the WAN interface,
+# dropping QUIC (udp/443) and all IPv6. The double/ghost pools exist as sets
+# now but have no forward rules yet — they come with chaining (roadmap 4) and
+# Tor egress (roadmap 2), where Ghost peers will be force-redirected into
+# TransPort and everything else dropped (plan §5.3).
+table inet orion_fw
+delete table inet orion_fw
+table inet orion_fw {
+  set fast_pool {
+    type ipv4_addr
+    flags interval
+    elements = { {{ orion_pool_fast }} }
+  }
+  set double_pool {
+    type ipv4_addr
+    flags interval
+    elements = { {{ orion_pool_double }} }
+  }
+  set ghost_pool {
+    type ipv4_addr
+    flags interval
+    elements = { {{ orion_pool_ghost }} }
+  }
+  # transit pools: client addresses as seen arriving from the entry node
+  # over the entry<->egress hop (roadmap 4; sources are preserved in transit)
+  set hop_fast {
+    type ipv4_addr
+    flags interval
+    elements = { {{ orion_hop_fast }} }
+  }
+  set hop_double {
+    type ipv4_addr
+    flags interval
+    elements = { {{ orion_hop_double }} }
+  }
+  set hop_ghost {
+    type ipv4_addr
+    flags interval
+    elements = { {{ orion_hop_ghost }} }
+  }
+
+  chain input {
+    type filter hook input priority filter; policy drop;
+    iifname "lo" accept
+    ct state invalid drop
+    ct state established,related accept
+    ip protocol icmp accept
+    ip6 nexthdr ipv6-icmp accept
+    # keep 22 listed until the inventory port change is confirmed working,
+    # then set orion_ssh_keep_port_22: false
+{% if orion_ssh_keep_port_22 | bool and orion_ssh_port != 22 %}
+    tcp dport { 22, {{ orion_ssh_port }} } ct state new accept
+{% else %}
+    tcp dport {{ orion_ssh_port }} ct state new accept
+{% endif %}
+    udp dport {{ orion_wg_port }} accept comment "WireGuard"
+    udp dport {{ orion_hop_port }} accept comment "entry<->egress hop"
+    # Ghost peers reach the Tor client only (their TCP/DNS is redirected to
+    # these ports in the prerouting chain below — plan §5.3)
+    iifname "{{ orion_wg_iface }}" ip saddr @ghost_pool tcp dport 9040 accept
+    iifname "{{ orion_wg_iface }}" ip saddr @ghost_pool udp dport 5353 accept
+    # Tor control port: NEW ID action only, tunnel clients, password-gated
+    iifname "{{ orion_wg_iface }}" ip saddr @fast_pool tcp dport 9051 accept
+    iifname "{{ orion_wg_iface }}" ip saddr @ghost_pool tcp dport 9051 accept
+    # ghost clients chained via the entry node reach Tor through the hop
+    iifname "wg-hop" ip saddr @hop_ghost tcp dport 9040 accept
+    iifname "wg-hop" ip saddr @hop_ghost udp dport 5353 accept
+  }
+
+  chain forward {
+    type filter hook forward priority filter; policy drop;
+    ct state invalid drop
+    ct state established,related accept
+    # Fast mode: direct NAT egress; QUIC is dropped so HTTP/3 falls back to
+    # TCP inside the tunnel; IPv6 has no accept rules → dropped (plan §5.6).
+    iifname "{{ orion_wg_iface }}" oifname "{{ orion_wan_interface }}" ip saddr @fast_pool meta l4proto tcp accept
+    iifname "{{ orion_wg_iface }}" oifname "{{ orion_wan_interface }}" ip saddr @fast_pool udp dport != 443 accept
+    iifname "{{ orion_wg_iface }}" oifname "{{ orion_wan_interface }}" ip saddr @fast_pool ip protocol icmp accept
+    # Double mode via the hop: direct NAT at the egress (QUIC + IPv6 dropped)
+    iifname "wg-hop" oifname "{{ orion_wan_interface }}" ip saddr @hop_fast meta l4proto tcp accept
+    iifname "wg-hop" oifname "{{ orion_wan_interface }}" ip saddr @hop_fast udp dport != 443 accept
+    iifname "wg-hop" oifname "{{ orion_wan_interface }}" ip saddr @hop_fast ip protocol icmp accept
+    iifname "wg-hop" oifname "{{ orion_wan_interface }}" ip saddr @hop_double meta l4proto tcp accept
+    iifname "wg-hop" oifname "{{ orion_wan_interface }}" ip saddr @hop_double udp dport != 443 accept
+    iifname "wg-hop" oifname "{{ orion_wan_interface }}" ip saddr @hop_double ip protocol icmp accept
+    # hop_ghost: no accepts — prerouting redirects feed Tor; the rest drops.
+  }
+
+  chain postrouting {
+    type nat hook postrouting priority srcnat; policy accept;
+    ip saddr @fast_pool oifname "{{ orion_wan_interface }}" masquerade
+    ip saddr @hop_fast oifname "{{ orion_wan_interface }}" masquerade
+    ip saddr @hop_double oifname "{{ orion_wan_interface }}" masquerade
+  }
+
+  chain prerouting {
+    type nat hook prerouting priority dstnat; policy accept;
+    # Ghost mode (plan §5.3): force every TCP connection and every DNS query
+    # from ghost peers into the Tor client; the forward chain drops the rest.
+    iifname "{{ orion_wg_iface }}" ip saddr @ghost_pool tcp dport != 9051 redirect to :9040
+    iifname "{{ orion_wg_iface }}" ip saddr @ghost_pool udp dport 53 redirect to :5353
+    # ghost clients chained via the entry get the same force-redirect
+    iifname "wg-hop" ip saddr @hop_ghost tcp dport != 9051 redirect to :9040
+    iifname "wg-hop" ip saddr @hop_ghost udp dport 53 redirect to :5353
+  }
+
+  # Host's own egress stays open in phase 1 (apt/NTP need it). Whitelisting
+  # the host's own output is phase-2 hardening: SSH admin sources, WireGuard,
+  # NTP, package mirrors — plan §5.3.
+  chain output {
+    type filter hook output priority filter; policy accept;
+  }
+}

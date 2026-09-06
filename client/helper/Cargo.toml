@@ -1,0 +1,13 @@
+[package]
+name = "orion-helper"
+version = "0.1.0"
+edition = "2024"
+description = "Orion root helper: owns nftables kill switch + wg-quick lifecycle"
+
+[[bin]]
+name = "orion-helper"
+path = "src/main.rs"
+
+[dependencies]
+orion-ipc = { path = "../protocol" }
+serde_json = "1"

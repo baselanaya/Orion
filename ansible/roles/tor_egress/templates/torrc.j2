@@ -1,0 +1,29 @@
+# {{ ansible_managed }} — Orion egress node, Tor CLIENT only (plan v1.2 §5.4)
+# This node never relays: ClientOnly + reject-all exit policy keep the VPS
+# provider quiet, and abuse complaints land on random Tor exits, not here.
+ClientOnly 1
+ExitPolicy reject *:*
+
+# Node-local control/testing only — never exposed beyond loopback.
+SocksPort 127.0.0.1:9050
+
+# Ghost peers (10.66.0.90-10.66.0.129 direct, or 10.66.1.90-10.66.1.129
+# chained via the entry) are force-redirected here by nftables: their TCP
+# lands on TransPort, their DNS on DNSPort (plan §5.3).
+# 9040/5353 are contractual — the node's nftables redirect rules hardcode them.
+TransPort {{ orion_vpn_gateway_ip }}:9040
+DNSPort {{ orion_vpn_gateway_ip }}:5353
+# second bind for ghost clients arriving over the entry<->egress hop
+TransPort 10.66.255.2:9040
+DNSPort 10.66.255.2:5353
+
+# .onion resolution for tunnel clients
+AutomapHostsOnResolve 1
+VirtualAddrNetworkIPv4 10.192.0.0/10
+
+# Control port: reachable only from inside the tunnel, for the client's
+# NEW ID action (SIGNAL NEWNYM on ghost-session start; plan roadmap 5).
+ControlPort {{ orion_vpn_gateway_ip }}:9051
+HashedControlPassword {{ orion_tor_control_hash }}
+
+Log notice syslog

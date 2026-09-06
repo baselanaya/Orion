@@ -1,0 +1,13 @@
+[Interface]
+# {{ ansible_managed }} — Orion egress node (plan v1.2 §5.3)
+# NAT / QUIC-drop / IPv6 policy lives in nftables (table orion_fw), not here.
+Address = {{ orion_vpn_gateway_ip }}/{{ orion_vpn_prefix }}
+ListenPort = {{ orion_wg_port }}
+PrivateKey = {{ orion_server_private_key }}
+MTU = 1420
+{% for p in orion_peers %}
+# peer: {{ p.name }} ({{ p.mode }} pool)
+[Peer]
+PublicKey = {{ p.pubkey }}
+AllowedIPs = {{ p.ip }}/32
+{% endfor %}

@@ -1,0 +1,16 @@
+---
+# Common hardening defaults — override per host in inventory/host_vars.
+orion_ssh_port: 22
+orion_ssh_keep_port_22: true
+
+# WireGuard / AmneziaWG (consumed by the consolidated nftables ruleset below;
+# the wireguard_egress role uses the same vars for the tunnel config).
+orion_wg_port: 4500
+orion_wg_iface: "awg0"
+orion_wan_interface: "{{ ansible_default_ipv4.interface | default('eth0') }}"
+
+# Peer address pools (plan v1.2 §5.3): server is 10.66.0.1.
+orion_vpn_subnet: "10.66.0.1/24"
+orion_pool_fast: "10.66.0.10-10.66.0.49"
+orion_pool_double: "10.66.0.50-10.66.0.89"
+orion_pool_ghost: "10.66.0.90-10.66.0.129"

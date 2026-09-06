@@ -1,0 +1,39 @@
+---
+orion_ssh_port: 22
+orion_ssh_keep_port_22: true
+orion_wg_port: 4500
+orion_wg_iface: "awg0"
+orion_vpn_gateway_ip: "10.66.0.1"
+orion_vpn_prefix: 24
+orion_peers: []
+orion_wan_interface: "{{ ansible_default_ipv4.interface | default('eth0') }}"
+
+# direct-connect client pools on the egress's own awg0
+orion_pool_fast: "10.66.0.10-10.66.0.49"
+orion_pool_double: "10.66.0.50-10.66.0.89"
+orion_pool_ghost: "10.66.0.90-10.66.0.129"
+
+# entry<->egress hop (roadmap 4): plain WireGuard, infrastructure-to-infra
+orion_hop_port: 4501
+orion_hop_address: "10.66.255.2/30"
+orion_hop_peer_ip: "10.66.255.1/32"
+# client source pools as seen arriving over the hop (entry's client net)
+orion_hop_fast: "10.66.1.10-10.66.1.49"
+orion_hop_double: "10.66.1.50-10.66.1.89"
+orion_hop_ghost: "10.66.1.90-10.66.1.129"
+# supplied per-host from host_vars (generated once, gitignored):
+#   orion_hop_private_key  - this node's hop key
+#   orion_hop_peer_pub     - the entry node's hop public key
+
+# AmneziaWG obfuscation parameters (plan roadmap 3). Both ends MUST match.
+# Node and every client profile render the same values; rotate = regenerate
+# here, re-provision, and update client profiles.
+orion_awg_jc: 4
+orion_awg_jmin: 50
+orion_awg_jmax: 300
+orion_awg_s1: 87
+orion_awg_s2: 42
+orion_awg_h1: "1123214321-1143214321"
+orion_awg_h2: "987654321-997654321"
+orion_awg_h3: "765432109-775432109"
+orion_awg_h4: "654321098-664321098"

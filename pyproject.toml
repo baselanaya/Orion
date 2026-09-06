@@ -1,0 +1,16 @@
+[project]
+name = "orion"
+version = "0.1.0"
+description = "Orion — self-hosted privacy VPN (dev & provisioning tooling)"
+requires-python = ">=3.12"
+
+# Tooling-only project: never build/install this directory as a package.
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+  "ansible-core>=2.21",
+  "pyyaml>=6",
+  "jinja2>=3",
+]

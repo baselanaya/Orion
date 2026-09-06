@@ -1,0 +1,5 @@
+---
+- name: restart tor
+  ansible.builtin.systemd:
+    name: tor@default
+    state: restarted

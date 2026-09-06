@@ -1,0 +1,34 @@
+---
+# Copy to inventory.yml and fill in your nodes. host_vars/<name>.yml holds peers.
+#
+# First-run notes:
+# - Debian VPS images boot with root + password SSH. Put your public key in the
+#   image's authorized_keys first (provider panel or cloud-init), or add a deploy
+#   user before running this playbook — password auth is disabled by it.
+# - The firewall keeps BOTH port 22 and orion_ssh_port open (orion_ssh_keep_port_22).
+#   After confirming the new port works, set orion_ssh_keep_port_22: false in
+#   host_vars and update ansible_port here.
+all:
+  children:
+    orion_nodes:
+      children:
+        egress:
+        entry:
+
+    egress:
+      hosts:
+        egress-1:
+          ansible_host: 203.0.113.10
+          ansible_port: 22
+          ansible_user: root
+          orion_ssh_port: 22
+          orion_wg_port: 4500
+
+    entry:
+      hosts:
+        entry-1:
+          ansible_host: 203.0.113.20
+          ansible_port: 22
+          ansible_user: root
+          orion_ssh_port: 22
+          orion_wg_port: 4500

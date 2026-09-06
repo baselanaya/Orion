@@ -1,0 +1,12 @@
+---
+# WireGuard peers for host egress-1. Generate a keypair with
+# scripts/new-peer.sh and paste the public key here, then re-run the playbook.
+# The `ip` must fall inside the pool for the peer's mode:
+#   fast:   10.66.0.10 – 10.66.0.49
+#   double: 10.66.0.50 – 10.66.0.89   (reserved until the chain lands)
+#   ghost:  10.66.0.90 – 10.66.0.129  (reserved until Tor lands)
+orion_peers:
+  - name: laptop
+    mode: fast
+    ip: 10.66.0.10
+    pubkey: "REPLACE_WITH_scripts/new-peer.sh_OUTPUT"

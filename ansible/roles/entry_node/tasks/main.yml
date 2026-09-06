@@ -1,0 +1,177 @@
+---
+- name: Install kernel headers for the running kernel (DKMS build)
+  ansible.builtin.apt:
+    name:
+      - linux-headers-amd64
+      - "linux-headers-{{ ansible_kernel }}"
+    state: present
+
+- name: Ensure 1G swap exists (DKMS build insurance on small droplets)
+  ansible.builtin.shell: |
+    set -e
+    if ! swapon --show=NAME --noheadings | grep -q .; then
+      fallocate -l 1G /swapfile
+      chmod 600 /swapfile
+      mkswap /swapfile
+      swapon /swapfile
+      echo "/swapfile none swap sw 0 0" >> /etc/fstab
+    fi
+  args:
+    executable: /bin/bash
+    creates: /swapfile
+
+- name: Trust the Amnezia PPA signing key (fingerprint-pinned)
+  ansible.builtin.shell: |
+    set -e
+    curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x75C9DD72C799870E310542E24166F2C257290828" \
+      | gpg --batch --no-tty --yes --dearmor -o /etc/apt/keyrings/amnezia-ppa.gpg
+    got="$(gpg --batch --no-tty --show-keys --with-colons /etc/apt/keyrings/amnezia-ppa.gpg | awk -F: '/^fpr:/{print $10; exit}')"
+    [ "$got" = "75C9DD72C799870E310542E24166F2C257290828" ]
+  args:
+    executable: /bin/bash
+    creates: /etc/apt/keyrings/amnezia-ppa.gpg
+
+- name: Add Amnezia PPA (noble suite, DEB822)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/amnezia-ppa.sources
+    content: |
+      Types: deb
+      URIs: https://ppa.launchpadcontent.net/amnezia/ppa/ubuntu
+      Suites: noble
+      Components: main
+      Signed-By: /etc/apt/keyrings/amnezia-ppa.gpg
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install AmneziaWG (kernel module via DKMS + tools)
+  ansible.builtin.apt:
+    name:
+      - amneziawg
+      - amneziawg-tools
+      - amneziawg-dkms
+    state: present
+    update_cache: true
+
+- name: Install wireguard-tools (plain WG for the hop + key generation)
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+
+- name: Load the amneziawg module at boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/amneziawg.conf
+    content: "amneziawg\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable IPv4 forwarding (plan §5.3)
+  ansible.builtin.template:
+    src: sysctl_orion.conf.j2
+    dest: /etc/sysctl.d/99-orion.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload sysctl
+
+- name: Generate the client-facing server key (kept on this node only)
+  ansible.builtin.shell: "umask 077 && wg genkey > /etc/amnezia/entry.key"
+  args:
+    creates: /etc/amnezia/entry.key
+  no_log: true
+
+- name: Read the client-facing server key
+  ansible.builtin.slurp:
+    src: /etc/amnezia/entry.key
+  register: entry_key_b64
+  no_log: true
+
+- name: Set client-facing server key fact
+  ansible.builtin.set_fact:
+    orion_server_private_key: "{{ entry_key_b64.content | b64decode | trim }}"
+  no_log: true
+
+- name: Derive client-facing server public key
+  ansible.builtin.shell: "wg pubkey < /etc/amnezia/entry.key"
+  changed_when: false
+  register: entry_pubkey
+
+- name: Validate peer list
+  ansible.builtin.assert:
+    that:
+      - p.name is defined
+      - p.mode is defined
+      - p.ip is defined
+      - p.pubkey is defined and p.pubkey | length > 0
+    fail_msg: >-
+      peer '{{ p.name | default("unnamed") }}' is incomplete - paste its pubkey
+      into host_vars/entry-1.yml
+  loop: "{{ orion_peers }}"
+  loop_control:
+    loop_var: p
+  when: orion_peers | length > 0
+
+- name: Install client-facing awg0 configuration (obfuscated)
+  ansible.builtin.template:
+    src: awg0.conf.j2
+    dest: /etc/amnezia/awg0.conf
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart orion-awg
+
+- name: Install the orion-awg systemd unit
+  ansible.builtin.template:
+    src: orion-awg.service.j2
+    dest: /etc/systemd/system/orion-awg.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart orion-awg
+
+- name: Install the entry<->egress hop configuration
+  ansible.builtin.template:
+    src: wg-hop.conf.j2
+    dest: /etc/wireguard/wg-hop.conf
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart wg-hop
+
+- name: Install the entry nftables ruleset
+  ansible.builtin.template:
+    src: nftables-entry.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: nft -c -f %s
+  notify: reload nftables
+
+- name: Enable nftables
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+    state: started
+
+- name: Enable the obfuscated client-facing tunnel at boot
+  ansible.builtin.systemd:
+    name: orion-awg
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Enable the hop tunnel at boot
+  ansible.builtin.systemd:
+    name: wg-quick@wg-hop
+    enabled: true
+    state: started
+  when: orion_hop_private_key is defined and orion_hop_peer_pub is defined
+
+- name: Report client-side endpoint parameters
+  ansible.builtin.debug:
+    msg:
+      entry_public_key: "{{ entry_pubkey.stdout | trim }}"
+      endpoint: "<this-node-ip>:{{ orion_wg_port }}"
+      note: "Client profiles for the entry carry the same AWG parameters and their own pool address"

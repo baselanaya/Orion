@@ -1,0 +1,67 @@
+#!/usr/bin/nft -f
+# {{ ansible_managed }}
+# Orion ENTRY node firewall: client-facing obfuscated tunnel in, per-mode
+# policy out. Fast clients NAT directly out the WAN; Double/Ghost clients are
+# policy-routed (fwmark 4501) into the hop to the egress node, sources
+# preserved so the egress can classify and enforce (plan v1.3 §5.2-§5.3).
+table inet orion_fw
+delete table inet orion_fw
+table inet orion_fw {
+  set fast_pool {
+    type ipv4_addr
+    flags interval
+    elements = { {{ orion_entry_fast }} }
+  }
+  set double_pool {
+    type ipv4_addr
+    flags interval
+    elements = { {{ orion_entry_double }} }
+  }
+  set ghost_pool {
+    type ipv4_addr
+    flags interval
+    elements = { {{ orion_entry_ghost }} }
+  }
+
+  chain input {
+    type filter hook input priority filter; policy drop;
+    iifname "lo" accept
+    ct state invalid drop
+    ct state established,related accept
+    ip protocol icmp accept
+    ip6 nexthdr ipv6-icmp accept
+    tcp dport { 22, {{ orion_ssh_port }} } ct state new accept
+    udp dport {{ orion_wg_port }} accept comment "AWG client-facing"
+  }
+
+  chain forward {
+    type filter hook forward priority filter; policy drop;
+    ct state invalid drop
+    ct state established,related accept
+    # FAST via entry: direct NAT out the WAN (QUIC + IPv6 dropped)
+    iifname "awg0" oifname "{{ orion_wan_interface }}" ip saddr @fast_pool meta l4proto tcp accept
+    iifname "awg0" oifname "{{ orion_wan_interface }}" ip saddr @fast_pool udp dport != 443 accept
+    iifname "awg0" oifname "{{ orion_wan_interface }}" ip saddr @fast_pool ip protocol icmp accept
+    # DOUBLE + GHOST: forward into the hop, source preserved
+    iifname "awg0" oifname "wg-hop" ip saddr @double_pool accept
+    iifname "awg0" oifname "wg-hop" ip saddr @ghost_pool accept
+    # anything else: dropped
+  }
+
+  chain postrouting {
+    type nat hook postrouting priority srcnat; policy accept;
+    ip saddr @fast_pool oifname "{{ orion_wan_interface }}" masquerade
+  }
+
+  # policy-routing marks (read by `ip rule fwmark 4500/4501` from wg-hop.conf)
+  chain prerouting_mangle {
+    type filter hook prerouting priority mangle; policy accept;
+    iifname "awg0" ip saddr @fast_pool meta mark set 4500
+    iifname "awg0" ip saddr @double_pool meta mark set 4501
+    iifname "awg0" ip saddr @ghost_pool meta mark set 4501
+  }
+
+  chain output {
+    type filter hook output priority filter; policy accept;
+  }
+}

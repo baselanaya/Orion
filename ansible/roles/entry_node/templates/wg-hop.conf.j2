@@ -1,0 +1,18 @@
+[Interface]
+# {{ ansible_managed }} — entry side of the entry<->egress hop (roadmap 4).
+# Plain WireGuard (already-obfuscated client traffic between our own nodes).
+# Table=off: routing is policy-based (fwmark 4500 fast -> WAN, 4501
+# double/ghost -> this hop); this socket pins fwmark {{ orion_hop_fwmark }}
+# so its own transport never loops into a client tunnel.
+Address = {{ orion_hop_address }}
+PrivateKey = {{ orion_hop_private_key }}
+MTU = 1420
+Table = off
+PostUp = ip rule add priority 9800 fwmark 4501 table 4501; ip route add default dev %i table 4501; ip rule add priority 9790 fwmark 4500 table main; wg set %i fwmark {{ orion_hop_fwmark }}
+PreDown = ip rule del priority 9800 fwmark 4501 table 4501; ip route del default dev %i table 4501; ip rule del priority 9790 fwmark 4500 table main
+
+[Peer]
+# egress node
+PublicKey = {{ orion_hop_peer_pub }}
+Endpoint = {{ orion_hop_endpoint }}
+AllowedIPs = 0.0.0.0/0

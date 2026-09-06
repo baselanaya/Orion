@@ -1,0 +1,26 @@
+---
+- name: Install Tor
+  ansible.builtin.apt:
+    name: tor
+    state: present
+
+- name: Install Tor client configuration
+  ansible.builtin.template:
+    src: torrc.j2
+    dest: /etc/tor/torrc
+    owner: debian-tor
+    group: debian-tor
+    mode: "0644"
+  notify: restart tor
+
+- name: Enable Tor client (Debian multi-instance unit reads /etc/tor/torrc)
+  ansible.builtin.systemd:
+    name: tor@default
+    enabled: true
+    state: started
+
+- name: Persist the Tor instance across reboots (tor@.service ships without [Install])
+  ansible.builtin.file:
+    src: /usr/lib/systemd/system/tor@.service
+    dest: /etc/systemd/system/multi-user.target.wants/tor@default.service
+    state: link
