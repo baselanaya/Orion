@@ -57,12 +57,16 @@ static APP_LOCK: Mutex<()> = Mutex::new(());
 fn main() {
     match std::env::args().nth(1).unwrap_or_default().as_str() {
         "serve" => serve(),
+        "status" => {
+            let _guard = APP_LOCK.lock().unwrap();
+            println!("{}", serde_json::to_string_pretty(&status()).unwrap());
+        }
         "unlock" => {
             let _guard = APP_LOCK.lock().unwrap();
             unlock();
         }
         _other => {
-            eprintln!("usage: orion-helper [serve|unlock]");
+            eprintln!("usage: orion-helper [serve|status|unlock]");
             std::process::exit(2);
         }
     }
@@ -364,23 +368,34 @@ fn have_dns_hook() -> bool {
 
 fn build_wg_conf(profile: &Profile) -> Result<String, String> {
     let text = fs_read(&profile.path)?;
-    if have_dns_hook() {
-        return Ok(text);
-    }
-    let mut stripped = String::new();
+    let has_dns_hook = have_dns_hook();
+    let mut out = String::new();
     let mut in_interface = false;
     for raw in text.lines() {
         let line = raw.trim();
         if line.starts_with('[') {
             in_interface = line.eq_ignore_ascii_case("[interface]");
         }
-        if in_interface && line.to_ascii_lowercase().starts_with("dns") {
+        let key = line.to_ascii_lowercase();
+        // DNS lines need a resolvconf hook; without one they are stripped
+        if in_interface && key.starts_with("dns") && !has_dns_hook {
             continue;
         }
-        stripped.push_str(raw);
-        stripped.push('\n');
+        // hardening: wg-quick/awg-quick would execute these as root — our
+        // profiles never ship them (defense in depth against a poisoned
+        // profile file)
+        if key.starts_with("postup")
+            || key.starts_with("preup")
+            || key.starts_with("postdown")
+            || key.starts_with("predown")
+            || key.starts_with("table")
+        {
+            continue;
+        }
+        out.push_str(raw);
+        out.push('\n');
     }
-    Ok(stripped)
+    Ok(out)
 }
 
 fn connect_req(name: &str) -> Response {
