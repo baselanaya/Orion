@@ -52,6 +52,7 @@
         <span class="hud-item">rx <b id="rx">--</b></span>
         <span class="hud-item">tx <b id="tx">--</b></span>
         <span class="hud-item">handshake <b id="hs">--</b></span>
+        <span class="hud-item">session <b id="uptime">--</b></span>
       </div>
     </main>
 
@@ -76,6 +77,14 @@
         <input type="checkbox" id="autoStart" />
         <span>Connect automatically when Orion starts</span>
       </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="newnymOnConnect" />
+          <span>Rotate Tor circuits on every Ghost connect</span>
+        </label>
+        <div class="diag">
+          <button class="diagbtn" id="selfTest">Run self-test</button>
+          <div class="diag-results mono" id="diagResults"></div>
+        </div>
       <p class="modal-note">zero telemetry. no analytics, no tracking, no accounts.</p>
     </div>
   </div>

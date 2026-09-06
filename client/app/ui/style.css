@@ -306,3 +306,21 @@ button { touch-action: manipulation; }
 .modal-body span { color: var(--ash); }
 .modal-body b { color: var(--ink); font-weight: 500; text-align: right; }
 .modal-note { margin: 12px 0 0; color: var(--ash); font-size: 10.5px; }
+
+/* ---- diagnostics + toggles (v0.6) ---- */
+.diag { margin-top: 12px; }
+.diagbtn {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font: 500 11.5px/1 "Hanken Grotesk", sans-serif;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.diagbtn:hover { border-color: var(--ash); }
+.diagbtn:active { transform: scale(0.98); }
+.diagbtn:disabled { opacity: 0.4; cursor: default; }
+.diag-results { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; }
+.diag-results .row { display: flex; justify-content: space-between; gap: 8px; }
+.diag-results .ok { color: var(--ok); }
+.diag-results .fail { color: var(--alarm); }

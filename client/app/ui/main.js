@@ -20,6 +20,9 @@ let exitLoc = null;           // {ip, lat, lon, city, country} — current exit
 let nodeGeoCache = {};        // ip -> {city, country, lat, lon}
 let lastRx = null, lastTx = null, lastHs = null;
 let connecting = false;
+let connectedSince = null;
+const NEWNYM_KEY = "orion.newnymConnect";
+const AUTO_KEY = "orion.autostart";
 let s_activeProfile = null;
 let s_nodeIp = null;
 let exitTimer = null;
@@ -336,8 +339,12 @@ async function poll() {
   $("rx").textContent = fmtBytes(s.rx_bytes);
   $("tx").textContent = fmtBytes(s.tx_bytes);
   $("hs").textContent = fmtAge(s.handshake_age_secs);
+  const up = connectedSince ? fmtAge(Math.floor((Date.now() - connectedSince) / 1000)) : "--";
+  $("uptime").textContent = up;
 
   const connected = phase === "fast" || phase === "ghost";
+  if (connected && !connectedSince) connectedSince = Date.now();
+  if (!connected) connectedSince = null;
   if (connected) {
     if (lastHs != null && s.handshake_age_secs != null && s.handshake_age_secs < lastHs) {
       map.exitPulse();
@@ -407,6 +414,12 @@ $("actionBtn").onclick = async () => {
     try {
       await invoke("connect", { profile: selected });
       setExitText(null);
+      if (mode === "ghost" && localStorage.getItem(NEWNYM_KEY) === "1") {
+        try {
+          await invoke("new_identity");
+          exitTimer = null; shownExit = null;
+        } catch { /* non-fatal: tunnel is still up */ }
+      }
     } catch (e) {
       $("error").textContent = String(e);
       phase = "standby";
@@ -419,6 +432,40 @@ $("actionBtn").onclick = async () => {
 };
 
 $("settingsBtn").onclick = () => { $("settingsModal").hidden = false; };
+const newnymBox = $("newnymOnConnect");
+if (newnymBox) {
+  newnymBox.checked = localStorage.getItem(NEWNYM_KEY) === "1";
+  newnymBox.onchange = () => localStorage.setItem(NEWNYM_KEY, newnymBox.checked ? "1" : "0");
+}
+$("selfTest").onclick = runSelfTest;
+
+async function runSelfTest() {
+  const btn = $("selfTest"), out = $("diagResults");
+  btn.disabled = true;
+  out.innerHTML = "";
+  const row = (name, ok, detail) => {
+    const d = document.createElement("div");
+    d.className = "row";
+    d.innerHTML = `<span>${name}</span><span class="${ok ? "ok" : "fail"}">${ok ? "PASS" : "FAIL"}${detail ? " - " + detail : ""}</span>`;
+    out.append(d);
+  };
+  row("helper link", !!(window.__TAURI__ && window.__TAURI__.core));
+  let st = null;
+  try { st = await invoke("status"); row("helper status", true, st.state); } catch (e) { row("helper status", false, String(e)); btn.disabled = false; return; }
+  try {
+    const g = await geo("");
+    row("exit ip", true, g ? `${g.ip} (${g.city}, ${g.country})` : "no lookup");
+  } catch { row("exit ip", false, "lookup failed"); }
+  try {
+    const r = await fetch("https://cloudflare-dns.com/dns-query?name=example.com&type=A", { headers: { accept: "application/dns-json" }, signal: AbortSignal.timeout(6000) });
+    const j = await r.json();
+    row("dns resolution", (j.Answer || []).length > 0, (j.Answer?.[0]?.data) || "no answer");
+  } catch { row("dns resolution", false, "no answer - leak or block"); }
+  row("handshake", st.handshake_age_secs != null && st.handshake_age_secs < 180,
+      st.handshake_age_secs != null ? st.handshake_age_secs + "s ago" : "none yet");
+  row("kill switch", "present" , st.state === "connected" ? "armed" : st.state === "locked_no_tunnel" ? "sealed" : "standby");
+  btn.disabled = false;
+}
 $("settingsClose").onclick = () => { $("settingsModal").hidden = true; };
 $("settingsModal").addEventListener("click", (e) => {
   if (e.target === $("settingsModal")) $("settingsModal").hidden = true;

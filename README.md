@@ -1,5 +1,8 @@
 <div align="center">
 
+[![ci](https://github.com/baselanaya/Orion/actions/workflows/ci.yml/badge.svg)](https://github.com/baselanaya/Orion/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 <img src="brand/orion-logo-512.png" width="120" alt="Orion logo" />
 
 # ORION
@@ -123,7 +126,14 @@ public key for your client profile. Full runbook:
 ansible/        node provisioning (hardening, AmneziaWG, Tor, nftables)
 client/         Tauri app (UI), root helper daemon, IPC protocol crates
 docs/           system design, phase runbooks, design spec, review
-scripts/        peer keys, validation, install helpers
+scripts/        onboarding, peer keys, node update, uninstall, validation
+```
+
+## Upkeep
+
+```bash
+scripts/node-update.sh          # re-apply the playbook: package upgrades + config drift
+scripts/uninstall-client.sh     # remove the client (profiles kept; --purge removes them)
 ```
 
 ## Roadmap
