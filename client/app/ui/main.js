@@ -216,7 +216,11 @@ function renderServers() {
   if (!ordered.length) {
     const li = document.createElement("li");
     li.className = "server";
-    li.innerHTML = `<div class="meta"><b>No servers</b><small>add a profile to /etc/orion/profiles</small></div>`;
+    const meta = document.createElement("div"); meta.className = "meta";
+    const b = document.createElement("b"); b.textContent = "No servers";
+    const small = document.createElement("small"); small.textContent = "add a profile to /etc/orion/profiles";
+    meta.append(b, small);
+    li.append(meta);
     ul.append(li);
     return;
   }
@@ -234,10 +238,13 @@ function renderServers() {
     const nodeIp = s_nodeIp;
     const g = pool !== "ghost" ? nodeGeoCache[nodeIp] : null;
     if (g) { title = g.city || title; sub = `${g.country} · direct exit`; }
-    li.innerHTML = `
-      <span class="tag mono">${tag}</span>
-      <div class="meta"><b>${title}</b><small>${sub}</small></div>
-      <span class="ok-dot"></span>`;
+    const tagEl = document.createElement("span");
+    tagEl.className = "tag mono"; tagEl.textContent = tag;
+    const meta = document.createElement("div"); meta.className = "meta";
+    const b = document.createElement("b"); b.textContent = title;
+    const small = document.createElement("small"); small.textContent = sub;
+    meta.append(b, small);
+    li.append(tagEl, meta);
     li.onclick = () => {
       if (phase === "linking") return;
       selected = p.name;
