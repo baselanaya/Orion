@@ -54,6 +54,7 @@ CTX = {
     "orion_hop_peer_pub": "HOPPUBx" * 6,
     "orion_hop_endpoint": "203.0.113.10:4501",
     "orion_hop_fwmark": "4502",
+    "orion_tor_control_hash": "16:0000000000000000000000000000000000000000000000000000000000000000",
     "orion_entry_fast": "10.66.1.10-10.66.1.49",
     "orion_entry_double": "10.66.1.50-10.66.1.89",
     "orion_entry_ghost": "10.66.1.90-10.66.1.129",
