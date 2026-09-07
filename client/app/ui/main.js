@@ -21,6 +21,7 @@ let nodeGeoCache = {};        // ip -> {city, country, lat, lon}
 let lastRx = null, lastTx = null, lastHs = null;
 let connecting = false;
 let connectedSince = null;
+let prevPhase = null;
 const NEWNYM_KEY = "orion.newnymConnect";
 const AUTO_KEY = "orion.autostart";
 let s_activeProfile = null;
@@ -290,6 +291,10 @@ function render() {
   if (ga) ga.hidden = !(phase === "ghost");
   $("headline").textContent = HEADLINES[phase];
   $("subline").textContent = SUBS[phase];
+  if (prevPhase && prevPhase !== phase && phase === "fault") {
+    osNotify("Orion", "Tunnel fault detected - the kill switch sealed your traffic.");
+  }
+  prevPhase = phase;
 
   const [chip, cls] = CHIP[phase];
   $("statusChip").textContent = chip;
@@ -345,7 +350,11 @@ async function poll() {
   $("uptime").textContent = up;
 
   const connected = phase === "fast" || phase === "ghost";
-  if (connected && !connectedSince) connectedSince = Date.now();
+  if (connected && !connectedSince) {
+    osNotify("Orion", "Your traffic is now confined through " + (phase === "ghost" ? "Tor." : "your node."));
+    connectedSince = Date.now();
+    osNotify("Orion", "Your traffic is now confined through " + (phase === "ghost" ? "Tor." : "your node."));
+  }
   if (!connected) connectedSince = null;
   if (connected) {
     if (lastHs != null && s.handshake_age_secs != null && s.handshake_age_secs < lastHs) {

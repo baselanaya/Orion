@@ -1,5 +1,13 @@
 {
   "identifier": "default",
   "windows": ["main"],
-  "permissions": ["core:default", "opener:allow-open-path", "opener:allow-open-url"]
+  "permissions": [
+    "core:default",
+    "opener:allow-open-path",
+    "opener:allow-open-url",
+    "notification:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
+  ]
 }

@@ -21,6 +21,23 @@ jobs:
       - name: js syntax
         run: node --check client/app/ui/main.js
 
+  cross-platform-check:
+    strategy:
+      matrix:
+        include:
+          - { os: windows-latest }
+          - { os: macos-latest }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: "client" }
+      - name: cross-platform compile check (app + protocol; helper is Linux-first)
+        run: |
+          cd client
+          cargo check --release -p orion-ipc -p orion-app
+
   build:
     runs-on: ubuntu-latest
     steps:

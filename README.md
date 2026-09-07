@@ -33,10 +33,12 @@ to a commercial VPN provider.
 | **No tracking** | Zero telemetry, zero analytics, zero accounts. The client talks only to your own node and (for the exit-city display) a single geolocation lookup. |
 | **Strong encryption** | 256-bit authenticated encryption (ChaCha20-Poly1305 — the WireGuard standard) on every hop, wrapped in AmneziaWG junk-packet obfuscation to defeat DPI. |
 | **DNS protection** | DNS rides the encrypted tunnel; Ghost mode resolves through Tor's DNS port. The fail-closed firewall makes DNS leaks structurally impossible. |
-| **Auto start** | Optional one-toggle auto-connect: Orion secures your traffic the moment it opens. |
+| **Auto start** | Optional one-toggle auto-connect: Orion secures your traffic the moment it opens. Plus OS-login autostart for the app itself. |
 | **Device-wide VPN** | The tunnel is enforced system-wide by nftables — every app on the machine is covered, with a fail-closed kill switch if any hop dies. |
 | **Ghost mode** | All egress force-routed through the Tor network (TCP + DNS), enforced server-side per peer — a client bug can't bypass it. |
 | **NEW ID** | One click rotates your Tor circuits and hands you a fresh exit identity. |
+| **Notifications** | Desktop notifications when your traffic gets confined, when a fault seals the machine, and when circuits rotate. |
+| **System tray** | Close to tray, connect/disconnect and NEW ID from the menu, quit — the tunnel never depends on the window. |
 
 ## Honest limits (read before trusting it)
 

@@ -296,6 +296,20 @@ button { touch-action: manipulation; }
 }
 
 /* ---- settings modal ---- */
+.modal { max-height: 86vh; display: flex; flex-direction: column; }
+.settings-scroll { overflow-y: auto; flex: 1 1 auto; padding-right: 4px; }
+.section-label {
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ash);
+  margin-bottom: 8px;
+}
+.info-rows { display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
+.info-rows div { display: flex; justify-content: space-between; gap: 10px; }
+.info-rows span { color: var(--ash); }
+.info-rows b { color: var(--ink); font-weight: 500; text-align: right; }
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
