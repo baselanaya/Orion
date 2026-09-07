@@ -6,8 +6,11 @@ Self-hosted personal privacy VPN: Tauri desktop client + self-managed VPS nodes
 - Plan: docs/personal-vpn-system-design.md (v1.3 — fiat payments, no crypto)
 - Review of v1.1 (7/10 + critique): REVIEW.md — all findings resolved in v1.2, see the
   plan's §0 Changelog for the issue-by-issue map
-- Status: **phases 1-3 + packaging LIVE-VERIFIED** — see docs/phase-*.md runbooks
-  and docs/design/client-design.md (NordVPN-style UI v0.5)
+- Status: **phases 1-3 + packaging + mobile (Android) LIVE-VERIFIED** — see
+  docs/phase-*.md runbooks (mobile: docs/phase-mobile.md, verified 2026-09-07)
+  and docs/design/client-design.md (NordVPN-style UI v0.5). Node also runs a
+  plain-WG mobile listener (wg1, 10.66.2.1/24, UDP 51820); mobile client confs
+  live client-side (~/.orion/, never committed).
 - The plan's §8 ("Honest limits") sets the honesty bar for all docs in this repo —
   don't claim capabilities the threat model doesn't buy.
 
