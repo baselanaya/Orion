@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
+        android:name=".OrionApp"
         android:label="Orion"
         android:icon="@drawable/ic_launcher"
         android:theme="@style/Theme.Orion"
@@ -20,10 +21,16 @@
             </intent-filter>
         </activity>
 
-        <!-- the tunnel library's GoBackend userspace VPN service -->
+        <!-- the tunnel library's GoBackend userspace VPN service;
+             the android.net.VpnService action is required for the system's
+             always-on/lockdown resolver to find and bind it -->
         <service
             android:name="com.wireguard.android.backend.GoBackend$VpnService"
             android:exported="false"
-            android:permission="android.permission.BIND_VPN_SERVICE" />
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

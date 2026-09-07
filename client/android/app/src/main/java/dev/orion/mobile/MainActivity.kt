@@ -1,28 +1,30 @@
 package dev.orion.mobile
 
 import android.content.Intent
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import com.wireguard.android.backend.GoBackend
-import com.wireguard.android.backend.Statistics
+import com.google.zxing.BinaryBitmap
+import com.google.zxing.DecodeHintType
+import com.google.zxing.MultiFormatReader
+import com.google.zxing.RGBLuminanceSource
+import com.google.zxing.common.HybridBinarizer
 import com.wireguard.android.backend.Tunnel
 import com.wireguard.config.Config
 
-/** The library's Tunnel contract is just a name plus a state-change hook. */
-private class OrionTunnel(private val n: String) : Tunnel {
-    override fun getName(): String = n
-    override fun onStateChange(newState: Tunnel.State) {}
-}
-
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var backend: GoBackend
-    private var tunnel: OrionTunnel? = null
-    private var config: Config? = null
-    private var lastStats: Statistics? = null
+    private val app get() = application as OrionApp
+
+    private val pickQr = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { decodeQr(it) }
+    }
 
     private lateinit var stateWord: TextView
     private lateinit var subline: TextView
@@ -33,6 +35,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var txView: TextView
     private lateinit var hsView: TextView
     private lateinit var profileView: TextView
+    private var config: Config? = null
     private var connectedSince: Long? = null
     private var connecting = false
     private var lastError: String? = null
@@ -51,11 +54,15 @@ class MainActivity : AppCompatActivity() {
         hsView = findViewById(R.id.hs)
         profileView = findViewById(R.id.profileView)
 
-        backend = GoBackend(applicationContext)
-
         powerBtn.setOnClickListener { onPower() }
         powerBtn2.setOnClickListener { onPower() }
-        intent?.let { importFromIntent(it) }
+        findViewById<Button>(R.id.importBtn).setOnClickListener {
+            pickQr.launch(arrayOf("image/*"))
+        }
+        findViewById<Button>(R.id.alwaysOnBtn).setOnClickListener { openVpnSettings() }
+
+        val viaIntent = intent?.getStringExtra("conf_b64") != null || intent?.getStringExtra("conf") != null
+        if (viaIntent) importFromIntent(intent) else loadPersisted()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -71,15 +78,22 @@ class MainActivity : AppCompatActivity() {
             String(android.util.Base64.decode(b64, android.util.Base64.DEFAULT))
         else
             intent.getStringExtra("conf")?.replace("\\n", "\n") ?: return
-        importConf(confText, intent.getBooleanExtra("connect", false))
+        importConf(confText, intent.getBooleanExtra("connect", false), persist = true)
     }
 
-    private fun importConf(confText: String, autoConnect: Boolean) {
+    private fun loadPersisted() {
+        val text = app.persistedConf() ?: return
+        importConf(text, autoConnect = false, persist = false)
+    }
+
+    private fun importConf(confText: String, autoConnect: Boolean, persist: Boolean) {
         try {
             config = Config.parse(confText.byteInputStream())
-            tunnel = OrionTunnel("orion")
+            if (persist) app.persistConf(confText)
             val ep = config?.peers?.firstOrNull()?.endpoint?.map { it.toString() }?.orElse("?")
             profileView.text = "profile: ${config?.`interface`?.getAddresses()?.firstOrNull()} -> $ep"
+            lastError = null
+            subline.text = if (persist) "Profile saved on this device." else subline.text
             render()
             if (autoConnect) onPower()
         } catch (e: Exception) {
@@ -89,18 +103,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onPower() {
-        val t = tunnel ?: run { subline.text = "No profile loaded - pass the conf intent extra."; return }
-        val cfg = config ?: return
+        val cfg = config ?: run {
+            lastError = "No profile loaded - import a QR or pass the conf extra."
+            render()
+            return
+        }
         if (connecting) return
         connecting = true
         render()
         Thread {
             val result: Pair<Boolean, String?> = try {
-                if (backend.getState(t) == Tunnel.State.UP) {
-                    backend.setState(t, Tunnel.State.DOWN, null)
+                if (app.backend.getState(OrionTunnel) == Tunnel.State.UP) {
+                    app.backend.setState(OrionTunnel, Tunnel.State.DOWN, null)
                     Pair(true, null)
                 } else {
-                    backend.setState(t, Tunnel.State.UP, cfg)
+                    app.backend.setState(OrionTunnel, Tunnel.State.UP, cfg)
                     Pair(true, null)
                 }
             } catch (e: Exception) {
@@ -108,16 +125,20 @@ class MainActivity : AppCompatActivity() {
             }
             runOnUiThread {
                 connecting = false
-                if (result.second != null) subline.text = "tunnel error: ${result.second}"
-                if (backend.getState(t) == Tunnel.State.UP && connectedSince == null) connectedSince = System.currentTimeMillis()
-                if (backend.getState(t) == Tunnel.State.DOWN) connectedSince = null
+                if (result.second != null) lastError = "tunnel error: ${result.second}"
+                if (up() && connectedSince == null) connectedSince = System.currentTimeMillis()
+                if (!up()) connectedSince = null
                 render()
                 poll()
             }
         }.start()
     }
 
-    private fun up(): Boolean = tunnel?.let { backend.getState(it) == Tunnel.State.UP } ?: false
+    private fun up(): Boolean = try {
+        app.backend.getState(OrionTunnel) == Tunnel.State.UP
+    } catch (e: Exception) {
+        false
+    }
 
     private fun render() {
         val secured = up()
@@ -137,11 +158,9 @@ class MainActivity : AppCompatActivity() {
             else -> "Traffic unconfined. Load a profile and connect."
         }
         if (secured) {
-            val t = tunnel
-            val stats = t?.let { backend.getStatistics(it) }
-            lastStats = stats
-            rxView.text = stats?.let { fmtBytes(it.totalRx()) } ?: "--"
-            txView.text = stats?.let { fmtBytes(it.totalTx()) } ?: "--"
+            val stats = app.backend.getStatistics(OrionTunnel)
+            rxView.text = fmtBytes(stats.totalRx())
+            txView.text = fmtBytes(stats.totalTx())
             hsView.text = "live"
         } else {
             rxView.text = "--"; txView.text = "--"; hsView.text = "--"
@@ -158,10 +177,41 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Decode a QR image picked from storage into a WireGuard config. */
+    private fun decodeQr(uri: Uri) {
+        try {
+            val bmp = BitmapFactory.decodeStream(contentResolver.openInputStream(uri))
+                ?: throw IllegalArgumentException("not an image")
+            val w = bmp.width
+            val h = bmp.height
+            val pixels = IntArray(w * h)
+            bmp.getPixels(pixels, 0, w, 0, 0, w, h)
+            val result = MultiFormatReader().decode(
+                BinaryBitmap(HybridBinarizer(RGBLuminanceSource(w, h, pixels))),
+                mapOf(DecodeHintType.TRY_HARDER to true)
+            )
+            bmp.recycle()
+            importConf(result.text, autoConnect = false, persist = true)
+            subline.text = "Profile imported from QR - press CONNECT."
+        } catch (e: Exception) {
+            lastError = "QR decode failed: ${e.message ?: e.javaClass.simpleName}"
+            render()
+        }
+    }
+
+    /** System VPN page holds the Always-on + "block without VPN" toggles. */
+    private fun openVpnSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_VPN_SETTINGS))
+        } catch (e: Exception) {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    }
+
     /** Lightweight stats refresh while secured; stops itself when down. */
     private fun poll() {
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            if (tunnel != null) render()
+            render()
             if (up()) poll()
         }, 1500)
     }

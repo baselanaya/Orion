@@ -138,13 +138,14 @@ scripts/        onboarding, peer keys, node update, uninstall, validation
 The node runs a plain-WireGuard listener (port 51820/UDP) for phones, and there
 is now a first-party **Orion Android app** (`client/android/`) — Kotlin +
 the official WireGuard Go userspace, same navy UI as the desktop. Live-verified
-on an emulator 2026-09-07: tunnel up, internet exiting through the node.
+on an emulator 2026-09-07: QR profile import, persistence, and always-on
+kill-switch reconnect across a full reboot.
 
 ```bash
 scripts/new-mobile-peer.sh <peer-name>     # prints keys + the peer snippet
 scripts/node-update.sh                     # applies the new peer to the node
 scripts/mobile-qr.sh <profile.conf>        # scannable QR for the phone
-cd client/android && gradle assembleDebug  # APK (~19.9MB, all ABIs)
+cd client/android && gradle assembleDebug  # APK (~20MB, all ABIs)
 ```
 
 Runbook + emulator e2e: [docs/phase-mobile.md](docs/phase-mobile.md).

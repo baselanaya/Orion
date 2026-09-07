@@ -159,21 +159,60 @@
     </LinearLayout>
 
     <Button
-        android:id="@+id/powerBtn2"
-        android:layout_width="0dp"
+        android:id="@+id/alwaysOnBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginBottom="4dp"
+        android:background="@android:color/transparent"
+        app:backgroundTint="@android:color/transparent"
+        android:text="Always-on and kill switch ->"
+        android:textAllCaps="false"
+        android:textColor="#8E94A8"
+        android:textSize="11.5sp"
+        app:layout_constraintBottom_toTopOf="@id/bottomBar"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <LinearLayout
+        android:id="@+id/bottomBar"
+        android:layout_width="match_parent"
         android:layout_height="48dp"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="16dp"
-        android:background="#E9EEF0"
-        app:backgroundTint="#4C7DF0"
-        android:text="CONNECT"
-        android:textColor="#FFFFFF"
-        android:fontFamily="sans-serif"
-        android:textStyle="bold"
-        android:letterSpacing="0.14"
+        android:orientation="horizontal"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <Button
+            android:id="@+id/importBtn"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="0.4"
+            android:layout_marginEnd="8dp"
+            app:backgroundTint="@android:color/transparent"
+            app:strokeColor="#4C7DF0"
+            app:strokeWidth="1dp"
+            app:cornerRadius="8dp"
+            android:text="IMPORT QR"
+            android:textColor="#4C7DF0"
+            android:fontFamily="sans-serif"
+            android:textStyle="bold"
+            android:letterSpacing="0.12" />
+
+        <Button
+            android:id="@+id/powerBtn2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="0.6"
+            app:backgroundTint="#4C7DF0"
+            app:cornerRadius="8dp"
+            android:text="CONNECT"
+            android:textColor="#FFFFFF"
+            android:fontFamily="sans-serif"
+            android:textStyle="bold"
+            android:letterSpacing="0.14" />
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
