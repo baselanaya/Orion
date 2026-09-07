@@ -130,3 +130,34 @@ matches visual order, no pointer-only affordances.
 Double visuals become REAL once the entry node exists (the state machine and
 route already model the mode; DBL stays a reserved segment). Tor Browser
 wiring, NEW ID action, tray mode, light theme.
+
+## v0.7 (2026-09-07): settings deepening + tray refinement
+
+Ship-your-own-policy round — the Security section stopped being a wall of
+static claims and became the control surface:
+
+- **Kill-switch policy** — segmented control: strict / allow-lan / off.
+  strict stays the default and the honest copy says what off means (traffic
+  falls back to the raw network). Persisted helper-side
+  (/etc/orion/settings.json) via new Get/SetSettings IPC; applies on next
+  connect; the nftables ruleset gains RFC1918/link-local/multicast accepts
+  only in allow-lan.
+- **DNS policy** — auto (profile resolver through the tunnel) / custom
+  (comma-separated IP list) / off (system resolver untouched). Uses
+  wg-quick's resolver hook (openresolv or systemd-resolved); self-test now
+  reports whether a hook exists at all, and connect-time failures surface as
+  a persistent status warning instead of silence.
+- **Tor Browser path** — manual override in Integrations, validated
+  (absolute + exists) helper-side; wins over auto-detection. Also fixes the
+  TB button calling a nonexistent detect_tor_browser command — one launch
+  path through the helper now.
+- **Tray** — icon variants (dim = offline, green = secured, blue = ghost),
+  state tooltip, disabled state header, per-server Connect submenu,
+  Disconnect, Launch Tor Browser. Rebuilt only when the signature
+  (state|profile|profiles|mode) changes; menu actions run off-thread and
+  report failures as in-app errors.
+
+Verified live on the workstation: settings round-trips + validation rejects,
+allow-lan vs strict rulesets inspected in-kernel, custom DNS applied via
+resolvectl on orion0 (and absent in off mode), traffic through the tunnel,
+clean disconnect/reconnect cycles.

@@ -27,16 +27,72 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use orion_ipc::states::{CONNECTED, DISCONNECTED, LOCKED_NO_TUNNEL};
 use orion_ipc::{ProfileInfo, Request, Response};
+use serde::{Deserialize, Serialize};
 
 const IFACE: &str = "orion0";
 const RUN_DIR: &str = "/run/orion";
 const SOCKET_PATH: &str = "/run/orion/helper.sock";
 const PROFILES_DIR: &str = "/etc/orion/profiles";
+const SETTINGS_FILE: &str = "/etc/orion/settings.json";
+const DNS_WARNING_FILE: &str = "/run/orion/dns-warning";
 const WG_CONF: &str = "/etc/wireguard/orion0.conf";
 const AWG_CONF: &str = "/etc/amnezia/amneziawg/orion0.conf";
 const ACTIVE_FILE: &str = "/run/orion/active-profile";
 const ACTIVE_TOOL: &str = "/run/orion/active-tool";
 const KS_TABLE: &str = "inet orion_ks";
+
+/// Persisted client-side policy (DNS mode, kill-switch mode, Tor Browser
+/// path). Lives in /etc/orion/settings.json, root-owned 0600, written only
+/// through the authenticated IPC socket.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct HelperSettings {
+    /// "auto" (profile DNS) | "custom" (dns_custom) | "off" (never touch)
+    #[serde(default = "default_dns_mode")]
+    dns_mode: String,
+    #[serde(default)]
+    dns_custom: Option<String>,
+    /// "strict" (fail-closed) | "allow-lan" (fail-closed + RFC1918) | "off"
+    #[serde(default = "default_kill_switch")]
+    kill_switch: String,
+    #[serde(default)]
+    tor_browser_path: Option<String>,
+}
+
+fn default_dns_mode() -> String {
+    "auto".into()
+}
+fn default_kill_switch() -> String {
+    "strict".into()
+}
+
+impl Default for HelperSettings {
+    fn default() -> Self {
+        Self {
+            dns_mode: default_dns_mode(),
+            dns_custom: None,
+            kill_switch: default_kill_switch(),
+            tor_browser_path: None,
+        }
+    }
+}
+
+fn load_settings() -> HelperSettings {
+    std::fs::read_to_string(SETTINGS_FILE)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_settings(s: &HelperSettings) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
+    if let Some(parent) = Path::new(SETTINGS_FILE).parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(SETTINGS_FILE, json).map_err(|e| format!("write {SETTINGS_FILE}: {e}"))?;
+    std::fs::set_permissions(SETTINGS_FILE, std::fs::Permissions::from_mode(0o600))
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
 
 /// Which userspace tool owns the current tunnel: "wg" (kernel wireguard) or
 /// "awg" (kernel amneziawg). Decided per-profile: junk params (Jc) mean AWG.
@@ -63,7 +119,7 @@ fn main() {
         }
         "launch-tor-browser" => {
             let _guard = APP_LOCK.lock().unwrap();
-            launch_tor_browser();
+            let _ = launch_tor_browser();
         }
         "unlock" => {
             let _guard = APP_LOCK.lock().unwrap();
@@ -164,7 +220,82 @@ fn dispatch(req: &Request) -> Response {
             };
             r
         }
+        Request::GetSettings => settings_response(),
+        Request::SetSettings { dns_mode, dns_custom, kill_switch, tor_browser_path } => {
+            set_settings_req(dns_mode.as_deref(), dns_custom.as_deref(),
+                             kill_switch.as_deref(), tor_browser_path.as_deref())
+        }
     }
+}
+
+// ---------------------------------------------------------------- settings
+
+fn settings_response() -> Response {
+    let s = load_settings();
+    Response::Settings {
+        dns_mode: s.dns_mode,
+        dns_custom: s.dns_custom,
+        kill_switch: s.kill_switch,
+        tor_browser_path: s.tor_browser_path,
+        dns_hook: have_dns_hook(),
+    }
+}
+
+fn valid_dns_list(spec: &str) -> bool {
+    !spec.trim().is_empty()
+        && spec.split(',').all(|s| s.trim().parse::<std::net::IpAddr>().is_ok())
+}
+
+fn set_settings_req(
+    dns_mode: Option<&str>,
+    dns_custom: Option<&str>,
+    kill_switch: Option<&str>,
+    tor_browser_path: Option<&str>,
+) -> Response {
+    let mut s = load_settings();
+    if let Some(m) = dns_mode {
+        if !matches!(m, "auto" | "custom" | "off") {
+            return Response::Err { message: format!("invalid dns_mode: {m}") };
+        }
+        s.dns_mode = m.to_string();
+    }
+    if let Some(list) = dns_custom {
+        if !valid_dns_list(list) {
+            return Response::Err { message: "dns_custom must be comma-separated IPs".into() };
+        }
+        s.dns_custom = Some(list.to_string());
+    }
+    if s.dns_mode == "custom" && s.dns_custom.is_none() {
+        return Response::Err { message: "dns_mode=custom requires dns_custom".into() };
+    }
+    if let Some(k) = kill_switch {
+        if !matches!(k, "strict" | "allow-lan" | "off") {
+            return Response::Err { message: format!("invalid kill_switch: {k}") };
+        }
+        s.kill_switch = k.to_string();
+    }
+    if let Some(p) = tor_browser_path {
+        if p.is_empty() {
+            s.tor_browser_path = None; // back to auto-detect
+        } else {
+            let path = Path::new(p);
+            if !path.is_absolute() {
+                return Response::Err { message: "tor browser path must be absolute".into() };
+            }
+            if !path.exists() {
+                return Response::Err { message: format!("no such file: {p}") };
+            }
+            s.tor_browser_path = Some(p.to_string());
+        }
+    }
+    if let Err(e) = save_settings(&s) {
+        return Response::Err { message: e };
+    }
+    eprintln!(
+        "[orion-helper] settings saved: dns={} ks={}",
+        s.dns_mode, s.kill_switch
+    );
+    settings_response()
 }
 
 // ---------------------------------------------------------------- profiles
@@ -175,7 +306,7 @@ struct Profile {
     endpoint: Option<String>,
     addr: Option<String>,
     awg: bool,
-    _dns: Vec<String>,
+    dns: Vec<String>,
 }
 
 fn load_profile(name: &str) -> Result<Profile, String> {
@@ -224,7 +355,7 @@ fn load_profile(name: &str) -> Result<Profile, String> {
         endpoint,
         addr,
         awg,
-        _dns: dns,
+        dns,
     })
 }
 
@@ -304,7 +435,7 @@ fn resolve_endpoint(spec: &str) -> Result<Resolved, String> {
     Ok(r)
 }
 
-fn apply_lock(ep: &Resolved) -> Result<(), String> {
+fn apply_lock(ep: &Resolved, allow_lan: bool) -> Result<(), String> {
     let mut script = format!(
         "table {KS_TABLE}\n\
          delete table {KS_TABLE}\n\
@@ -314,6 +445,12 @@ fn apply_lock(ep: &Resolved) -> Result<(), String> {
          \x20   oifname \"lo\" accept\n\
          \x20   oifname \"{IFACE}\" accept\n"
     );
+    if allow_lan {
+        // user opted into local-network reachability; everything non-RFC1918
+        // still fails closed
+        script += "    meta nfproto ipv4 ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 224.0.0.0/4, 255.255.255.255/32 } accept\n";
+        script += "    meta nfproto ipv6 ip6 daddr { fe80::/10, fc00::/7, ff00::/8 } accept\n";
+    }
     if let Some(v4) = &ep.v4 {
         script += &format!("    meta nfproto ipv4 ip daddr {v4} udp dport {} accept\n", ep.port);
     }
@@ -382,19 +519,55 @@ fn have_dns_hook() -> bool {
         .unwrap_or(false)
 }
 
-fn build_wg_conf(profile: &Profile) -> Result<String, String> {
+/// Effective DNS for a connect, honoring the user's settings:
+///   auto   -> the profile's own DNS lines
+///   custom -> the configured resolver list
+///   off    -> never hand DNS to wg-quick (system resolver untouched)
+/// `None` means "strip DNS lines from the generated conf". Without a resolver
+/// hook (openresolv / systemd-resolved) DNS can't be applied at all — the
+/// caller surfaces that as a warning instead of silently pretending.
+fn effective_dns(profile: &Profile, settings: &HelperSettings) -> Option<String> {
+    match settings.dns_mode.as_str() {
+        "off" => None,
+        "custom" => settings.dns_custom.clone(),
+        _ => {
+            if profile.dns.is_empty() {
+                None
+            } else {
+                Some(profile.dns.join(", "))
+            }
+        }
+    }
+}
+
+fn build_wg_conf(profile: &Profile, settings: &HelperSettings) -> Result<(String, Option<String>), String> {
     let text = fs_read(&profile.path)?;
     let has_dns_hook = have_dns_hook();
+    let dns_line = effective_dns(profile, settings).filter(|_| has_dns_hook);
+    let warning = if !has_dns_hook && effective_dns(profile, settings).is_some() {
+        Some(
+            "DNS not enforced: no resolver hook on this system (install openresolv or enable systemd-resolved)".to_string(),
+        )
+    } else {
+        None
+    };
     let mut out = String::new();
     let mut in_interface = false;
+    let mut dns_written = false;
     for raw in text.lines() {
         let line = raw.trim();
         if line.starts_with('[') {
             in_interface = line.eq_ignore_ascii_case("[interface]");
         }
         let key = line.to_ascii_lowercase();
-        // DNS lines need a resolvconf hook; without one they are stripped
-        if in_interface && key.starts_with("dns") && !has_dns_hook {
+        // DNS is written by us, once, from the effective policy
+        if in_interface && key.starts_with("dns") {
+            if let Some(list) = &dns_line {
+                if !dns_written {
+                    out.push_str(&format!("DNS = {list}\n"));
+                    dns_written = true;
+                }
+            }
             continue;
         }
         // hardening: wg-quick/awg-quick would execute these as root — our
@@ -411,7 +584,7 @@ fn build_wg_conf(profile: &Profile) -> Result<String, String> {
         out.push_str(raw);
         out.push('\n');
     }
-    Ok(out)
+    Ok((out, warning))
 }
 
 fn connect_req(name: &str) -> Response {
@@ -435,9 +608,17 @@ fn connect_inner(name: &str) -> Result<Response, String> {
         .clone()
         .ok_or("profile has no Endpoint line")?;
     let ep = resolve_endpoint(&spec)?;
+    let settings = load_settings();
 
-    // 1. lock first (fail-closed), 2. then tunnel.
-    apply_lock(&ep)?;
+    // 1. lock first (fail-closed), 2. then tunnel. Mode "off" is an explicit
+    // user choice — clear any stale lock so status doesn't lie about sealing.
+    let lock_installed = if settings.kill_switch == "off" {
+        remove_lock();
+        false
+    } else {
+        apply_lock(&ep, settings.kill_switch == "allow-lan")?;
+        true
+    };
 
     // AWG profiles (junk params present) go through awg-quick, plain
     // WireGuard profiles through wg-quick; interface name is orion0 either way.
@@ -447,7 +628,15 @@ fn connect_inner(name: &str) -> Result<Response, String> {
         ("wg-quick", WG_CONF)
     };
 
-    let conf = build_wg_conf(&profile)?;
+    let (conf, dns_warning) = build_wg_conf(&profile, &settings)?;
+    match &dns_warning {
+        Some(w) => {
+            let _ = std::fs::write(DNS_WARNING_FILE, w);
+        }
+        None => {
+            let _ = std::fs::remove_file(DNS_WARNING_FILE);
+        }
+    }
     if let Some(parent) = Path::new(conf_path).parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -459,7 +648,10 @@ fn connect_inner(name: &str) -> Result<Response, String> {
         // Fresh failure is intentional — roll the lock back so the machine
         // isn't left dark; only crashes/disconnects keep the lock.
         let _ = run("timeout", &["10", quick, "down", IFACE], None);
-        remove_lock();
+        if lock_installed {
+            remove_lock();
+        }
+        let _ = std::fs::remove_file(DNS_WARNING_FILE);
         return Err(format!("{quick} up failed: {e}"));
     }
 
@@ -486,6 +678,7 @@ fn disconnect_req() -> Response {
         }
     }
     let _ = std::fs::remove_file(ACTIVE_FILE);
+    let _ = std::fs::remove_file(DNS_WARNING_FILE);
     // intentional disconnect — the lock comes down with it
     remove_lock();
     if warnings.is_empty() {
@@ -548,16 +741,22 @@ fn new_identity_req() -> Response {
 
 /// Find a Tor Browser installation and hand its starter to the caller's
 /// desktop session. Runs as root, so we drop back to uid 1000 for the launch.
+/// A user-configured path (settings) wins over auto-detection.
 fn launch_tor_browser() -> Result<Option<String>, String> {
-    let candidates = [
-        "/usr/bin/torbrowser-launcher",
-        "/usr/local/bin/torbrowser-launcher",
-    ];
+    let configured = load_settings().tor_browser_path;
+    let candidates: Vec<String> = if let Some(p) = configured {
+        vec![p]
+    } else {
+        vec![
+            "/usr/bin/torbrowser-launcher".into(),
+            "/usr/local/bin/torbrowser-launcher".into(),
+        ]
+    };
     let mut found: Option<String> = candidates
         .iter()
         .find(|p| std::path::Path::new(p).exists())
         .map(|p| p.to_string());
-    if found.is_none() {
+    if found.is_none() && load_settings().tor_browser_path.is_none() {
         // home installs: /home/<user>/tor-browser/Browser/start-tor-browser
         if let Ok(entries) = std::fs::read_dir("/home") {
             for e in entries.flatten() {
@@ -662,6 +861,12 @@ fn status() -> Response {
         DISCONNECTED
     };
 
+    // surface the last connect-time DNS warning until the next connect clears it
+    let detail = std::fs::read_to_string(DNS_WARNING_FILE)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
     Response::Status {
         state: state.to_string(),
         profile,
@@ -669,6 +874,6 @@ fn status() -> Response {
         handshake_age_secs,
         rx_bytes,
         tx_bytes,
-        detail: None,
+        detail,
     }
 }

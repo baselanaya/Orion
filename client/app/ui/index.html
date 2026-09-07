@@ -93,9 +93,28 @@
           <input type="checkbox" id="newnymOnConnect" />
           <span>Rotate Tor circuits on every Ghost connect</span>
         </label>
+        <div class="set-row">
+          <span class="set-label">kill switch</span>
+          <div class="seg mono" id="ksSeg">
+            <button data-v="strict" class="on" type="button">strict</button>
+            <button data-v="allow-lan" type="button">allow lan</button>
+            <button data-v="off" type="button">off</button>
+          </div>
+        </div>
+        <p class="set-hint" id="ksHint">strict: with the tunnel down, nothing leaves this machine. allow lan adds local-network reach. off disables the seal.</p>
+        <div class="set-row">
+          <span class="set-label">dns</span>
+          <div class="seg mono" id="dnsSeg">
+            <button data-v="auto" class="on" type="button">auto</button>
+            <button data-v="custom" type="button">custom</button>
+            <button data-v="off" type="button">off</button>
+          </div>
+          <input type="text" id="dnsInput" class="set-input mono" placeholder="10.66.0.1, 1.1.1.1" hidden />
+        </div>
+        <p class="set-hint" id="dnsHint">auto: the profile's resolver, reached through the tunnel. off leaves your system resolver untouched.</p>
         <div class="info-rows mono">
-          <div><span>kill switch</span><b>nftables, fail-closed</b></div>
-          <div><span>dns protection</span><b>tunnel-enforced</b></div>
+          <div><span>kill switch</span><b id="ksInfoVal">nftables, fail-closed</b></div>
+          <div><span>dns protection</span><b id="dnsInfoVal">tunnel-enforced</b></div>
           <div><span>device-wide</span><b>always, every app</b></div>
           <div><span>encryption</span><b>ChaCha20-Poly1305 (256-bit)</b></div>
           <div><span>obfuscation</span><b>AmneziaWG 3.1</b></div>
@@ -106,11 +125,12 @@
         <div class="section-label" style="margin-top: 14px">Integrations</div>
         <div class="modal-body" style="margin-top: 0">
           <div><span>simplelogin key</span><input type="password" id="slKey" placeholder="paste API key" style="background: var(--void); border: 1px solid var(--line); color: var(--ink); font: 11px 'IBM Plex Mono'; padding: 4px 6px; width: 150px" /></div>
+          <div><span>tor browser path</span><input type="text" id="tbPath" class="set-input mono" placeholder="auto-detect" style="width: 190px" /></div>
         </div>
 
         <div class="section-label" style="margin-top: 14px">About</div>
         <div class="info-rows mono">
-          <div><span>app</span><b>orion 0.2.0</b></div>
+          <div><span>app</span><b>orion 0.7.0</b></div>
           <div><span>helper</span><b>orion-helper.service</b></div>
         </div>
         <p class="modal-note">zero telemetry. no analytics, no tracking, no accounts.</p>

@@ -2449,7 +2449,7 @@ dependencies = [
 
 [[package]]
 name = "orion-app"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "orion-ipc",
  "tauri",
@@ -2461,15 +2461,16 @@ dependencies = [
 
 [[package]]
 name = "orion-helper"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "orion-ipc",
+ "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "orion-ipc"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",

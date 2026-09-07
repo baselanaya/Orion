@@ -356,3 +356,15 @@ button { touch-action: manipulation; }
 .diag-results .row { display: flex; justify-content: space-between; gap: 8px; }
 .diag-results .ok { color: var(--ok); }
 .diag-results .fail { color: var(--alarm); }
+
+/* settings v0.7: segmented policy controls */
+.set-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.set-label { width: 86px; flex: none; font-size: 11.5px; color: var(--ash); }
+.set-input { background: var(--void); border: 1px solid var(--line); color: var(--ink); font: 11px 'IBM Plex Mono', monospace; padding: 4px 6px; width: 170px; border-radius: 4px; }
+.set-input:focus { outline: none; border-color: var(--blue); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { background: transparent; border: 0; color: var(--ash); font: 10.5px 'IBM Plex Mono', monospace; padding: 4px 10px; cursor: pointer; letter-spacing: 0.04em; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button:hover { color: var(--ink); background: var(--panel); }
+.seg button.on { color: #fff; background: var(--blue); }
+.set-hint { margin: 5px 0 0; font-size: 10.5px; line-height: 1.45; color: var(--ash); opacity: 0.75; }

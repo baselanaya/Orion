@@ -40,6 +40,17 @@ pub enum Request {
     NewIdentity,
     /// Locate and launch a Tor Browser installation for the desktop user.
     LaunchTorBrowser,
+    /// Read the persisted helper settings (/etc/orion/settings.json).
+    GetSettings,
+    /// Persist settings; `None` fields keep their current value.
+    /// dns_mode: "auto" (profile DNS) | "custom" (dns_custom list) | "off".
+    /// kill_switch: "strict" | "allow-lan" | "off".
+    SetSettings {
+        dns_mode: Option<String>,
+        dns_custom: Option<String>,
+        kill_switch: Option<String>,
+        tor_browser_path: Option<String>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -57,6 +68,16 @@ pub enum Response {
     },
     Profiles {
         profiles: Vec<ProfileInfo>,
+    },
+    /// Persisted helper settings + whether this system has a resolver hook
+    /// wg-quick can use to apply DNS lines at all (openresolv or
+    /// systemd-resolved). `dns_hook == false` means DNS cannot be enforced.
+    Settings {
+        dns_mode: String,
+        dns_custom: Option<String>,
+        kill_switch: String,
+        tor_browser_path: Option<String>,
+        dns_hook: bool,
     },
     Err {
         message: String,
@@ -158,5 +179,27 @@ mod tests {
         let json = serde_json::to_string(&res).unwrap();
         let back: Response = serde_json::from_str(&json).unwrap();
         assert!(matches!(back, Response::Status { ref state, .. } if state == states::DISCONNECTED));
+    }
+
+    #[test]
+    fn settings_roundtrip() {
+        let req = Request::SetSettings {
+            dns_mode: Some("custom".into()),
+            dns_custom: Some("10.66.0.1".into()),
+            kill_switch: Some("allow-lan".into()),
+            tor_browser_path: None,
+        };
+        let back: Request = serde_json::from_str(&serde_json::to_string(&req).unwrap()).unwrap();
+        assert!(matches!(back, Request::SetSettings { ref dns_mode, .. } if dns_mode.as_deref() == Some("custom")));
+
+        let res = Response::Settings {
+            dns_mode: "auto".into(),
+            dns_custom: None,
+            kill_switch: "strict".into(),
+            tor_browser_path: None,
+            dns_hook: true,
+        };
+        let back: Response = serde_json::from_str(&serde_json::to_string(&res).unwrap()).unwrap();
+        assert!(matches!(back, Response::Settings { ref kill_switch, dns_hook, .. } if kill_switch == "strict" && dns_hook));
     }
 }

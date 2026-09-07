@@ -375,6 +375,15 @@ async function poll() {
     if (phase === "standby") await lookupHome();
   }
   render();
+  // keep the tray menu + icon in step with reality (Rust diffs internally)
+  if (window.__TAURI__) {
+    invoke("tray_sync", {
+      state: s.state,
+      profile: s.profile || null,
+      profiles: profiles.map((p) => p.name),
+      mode: phase === "fast" || phase === "ghost" ? phase : null,
+    }).catch(() => {});
+  }
 }
 
 async function refreshExitGeo() {
@@ -449,13 +458,81 @@ $("actionBtn").onclick = async () => {
   poll();
 };
 
-$("settingsBtn").onclick = () => { $("settingsModal").hidden = false; };
+$("settingsBtn").onclick = () => { $("settingsModal").hidden = false; loadSettings(); };
 const newnymBox = $("newnymOnConnect");
 if (newnymBox) {
   newnymBox.checked = localStorage.getItem(NEWNYM_KEY) === "1";
   newnymBox.onchange = () => localStorage.setItem(NEWNYM_KEY, newnymBox.checked ? "1" : "0");
 }
 $("selfTest").onclick = runSelfTest;
+
+/* ---------------------------------------------- settings v0.7 (helper-side) */
+let curSettings = null;
+
+function segSet(seg, val) {
+  for (const b of seg.querySelectorAll("button")) {
+    b.classList.toggle("on", b.dataset.v === val);
+  }
+}
+
+async function loadSettings() {
+  try {
+    const s = await invoke("get_settings");
+    curSettings = s;
+    segSet($("ksSeg"), s.kill_switch);
+    segSet($("dnsSeg"), s.dns_mode);
+    $("dnsInput").hidden = s.dns_mode !== "custom";
+    $("dnsInput").value = s.dns_custom || "";
+    $("tbPath").value = s.tor_browser_path || "";
+    $("ksHint").hidden = s.kill_switch !== "off";
+    $("ksHint").textContent = s.kill_switch === "off"
+      ? "kill switch is OFF: with the tunnel down, traffic falls back to your raw network."
+      : "strict: with the tunnel down, nothing leaves this machine. allow lan adds local-network reach. off disables the seal.";
+    renderPolicyInfo(s);
+  } catch (e) {
+    $("dnsInfoVal").textContent = "helper unavailable";
+    $("ksInfoVal").textContent = "helper unavailable";
+  }
+}
+
+function renderPolicyInfo(s) {
+  $("ksInfoVal").textContent = s.kill_switch === "strict" ? "nftables, fail-closed"
+    : s.kill_switch === "allow-lan" ? "nftables, fail-closed + lan" : "OFF - not protected";
+  $("dnsInfoVal").textContent = s.dns_mode === "auto" ? (s.dns_hook ? "tunnel-enforced" : "no resolver hook - not enforced")
+    : s.dns_mode === "custom" ? "custom: " + (s.dns_custom || "?") : "off (system resolver)";
+}
+
+async function saveSettings(fields) {
+  try {
+    const s = await invoke("set_settings", fields);
+    curSettings = s;
+    renderPolicyInfo(s);
+    $("subline").textContent = "Security settings saved. They apply on the next connect.";
+  } catch (e) {
+    $("subline").textContent = "settings error: " + e;
+    loadSettings();
+  }
+}
+
+for (const [segId, field] of [["ksSeg", "kill_switch"], ["dnsSeg", "dns_mode"]]) {
+  $(segId).addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    segSet($(segId), b.dataset.v);
+    if (field === "kill_switch") {
+      saveSettings({ killSwitch: b.dataset.v });
+    } else {
+      $("dnsInput").hidden = b.dataset.v !== "custom";
+      if (b.dataset.v === "custom" && !$("dnsInput").value.trim()) $("dnsInput").focus();
+      saveSettings({ dnsMode: b.dataset.v, dnsCustom: $("dnsInput").value.trim() || null });
+    }
+  });
+}
+$("dnsInput").onchange = () => {
+  const v = $("dnsInput").value.trim();
+  if (v) saveSettings({ dnsMode: "custom", dnsCustom: v });
+};
+$("tbPath").onchange = () => saveSettings({ torBrowserPath: $("tbPath").value.trim() });
 
 async function runSelfTest() {
   const btn = $("selfTest"), out = $("diagResults");
@@ -470,6 +547,14 @@ async function runSelfTest() {
   row("helper link", !!(window.__TAURI__ && window.__TAURI__.core));
   let st = null;
   try { st = await invoke("status"); row("helper status", true, st.state); } catch (e) { row("helper status", false, String(e)); btn.disabled = false; return; }
+  let stg = null;
+  try { stg = await invoke("get_settings"); } catch { /* optional */ }
+  if (stg) {
+    row("resolver hook", stg.dns_hook, stg.dns_hook ? "dns can be enforced" : "install openresolv or enable systemd-resolved");
+    row("kill switch policy", stg.kill_switch !== "off", stg.kill_switch);
+    row("dns policy", stg.dns_mode !== "off", stg.dns_mode + (stg.dns_custom ? ": " + stg.dns_custom : ""));
+  }
+  if (st.detail) row("last warning", false, st.detail);
   try {
     const g = await geo("");
     row("exit ip", true, g ? `${g.ip} (${g.city}, ${g.country})` : "no lookup");
@@ -481,7 +566,6 @@ async function runSelfTest() {
   } catch { row("dns resolution", false, "no answer - leak or block"); }
   row("handshake", st.handshake_age_secs != null && st.handshake_age_secs < 180,
       st.handshake_age_secs != null ? st.handshake_age_secs + "s ago" : "none yet");
-  row("kill switch", "present" , st.state === "connected" ? "armed" : st.state === "locked_no_tunnel" ? "sealed" : "standby");
   btn.disabled = false;
 }
 $("settingsClose").onclick = () => { $("settingsModal").hidden = true; };
@@ -512,21 +596,23 @@ $("copyExit").onclick = () => {
 
 addEventListener("resize", () => map.resize());
 
-/* ------------------------------------------------ tray + roadmap 5 */
+/* ------------------------------------------------ tray events */
 if (window.__TAURI__ && window.__TAURI__.event) {
   const { listen } = window.__TAURI__.event;
-  listen("tray-toggle", () => $("actionBtn").click());
   listen("tray-new-id", () => { if (!$("newIdBtn").hidden) $("newIdBtn").click(); });
+  listen("tray-error", (e) => { $("error").textContent = String(e.payload || e); });
+  listen("tray-tb", (e) => {
+    $("subline").textContent = e.payload ? "Tor Browser launched: its own Tor rides our Ghost tunnel." : "Tor Browser not found - set its path in Settings.";
+  });
 }
 
 $("tbBtn").onclick = async () => {
   try {
-    const r = await invoke("detect_tor_browser");
-    if (r.path) {
-      await window.__TAURI__.opener.openPath(r.path);
+    const r = await invoke("launch_tor_browser");
+    if (r.state === "launched") {
       $("subline").textContent = "Tor Browser launched: its own Tor rides our Ghost tunnel.";
     } else {
-      $("subline").textContent = "Tor Browser not found - install torbrowser-launcher.";
+      $("subline").textContent = "Tor Browser not found - set its path in Settings.";
     }
   } catch (e) { $("subline").textContent = String(e); }
 };

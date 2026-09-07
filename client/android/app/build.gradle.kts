@@ -11,8 +11,8 @@ android {
         applicationId = "dev.orion.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.6.1"
+        versionCode = 3
+        versionName = "0.7.0"
     }
 
     buildTypes {
@@ -32,6 +32,7 @@ android {
 dependencies {
     implementation("com.wireguard.android:tunnel:1.0.20260102")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.0.4")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")

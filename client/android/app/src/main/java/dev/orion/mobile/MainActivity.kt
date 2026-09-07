@@ -9,6 +9,7 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
@@ -24,6 +25,16 @@ class MainActivity : AppCompatActivity() {
 
     private val pickQr = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { decodeQr(it) }
+    }
+
+    /** Camera scan via zxing-android-embedded; result carries the payload. */
+    private val scanQr = registerForActivityResult(com.journeyapps.barcodescanner.ScanContract()) { result ->
+        val contents = result.contents
+        if (contents != null) {
+            importConf(contents, autoConnect = false, persist = true)
+            subline.text = "Profile imported from QR - press CONNECT."
+        }
+        // null contents = user cancelled; leave state as it was
     }
 
     private lateinit var stateWord: TextView
@@ -56,9 +67,7 @@ class MainActivity : AppCompatActivity() {
 
         powerBtn.setOnClickListener { onPower() }
         powerBtn2.setOnClickListener { onPower() }
-        findViewById<Button>(R.id.importBtn).setOnClickListener {
-            pickQr.launch(arrayOf("image/*"))
-        }
+        findViewById<Button>(R.id.importBtn).setOnClickListener { askImportSource() }
         findViewById<Button>(R.id.alwaysOnBtn).setOnClickListener { openVpnSettings() }
 
         val viaIntent = intent?.getStringExtra("conf_b64") != null || intent?.getStringExtra("conf") != null
@@ -84,6 +93,34 @@ class MainActivity : AppCompatActivity() {
     private fun loadPersisted() {
         val text = app.persistedConf() ?: return
         importConf(text, autoConnect = false, persist = false)
+    }
+
+    /** Camera scan when the device has one; the image-file path stays for
+     *  desktop-generated QR screenshots. */
+    private fun askImportSource() {
+        val hasCamera = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)
+        val options = buildList {
+            if (hasCamera) add("Scan with camera")
+            add("Choose an image file")
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Import profile QR")
+            .setItems(options) { _, which ->
+                val label = options[which]
+                if (label == "Scan with camera") {
+                    val opts = com.journeyapps.barcodescanner.ScanOptions().apply {
+                        setDesiredBarcodeFormats(com.journeyapps.barcodescanner.ScanOptions.QR_CODE)
+                        setPrompt("Point the camera at the Orion QR")
+                        setBeepEnabled(false)
+                        setOrientationLocked(true)
+                    }
+                    scanQr.launch(opts)
+                } else {
+                    pickQr.launch(arrayOf("image/*"))
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun importConf(confText: String, autoConnect: Boolean, persist: Boolean) {

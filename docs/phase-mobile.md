@@ -17,10 +17,11 @@ auto-reconnect across a full reboot** all green.
   The manifest declares the library's own `GoBackend$VpnService`; the app only
   implements the `Tunnel` interface (as a process-wide singleton — GoBackend
   tracks the active tunnel by object identity).
-- **Profile import**: in-app **IMPORT QR** button (document picker → ZXing
-  decode → config parse) or the base64 intent extra (`conf_b64`, + optional
-  `--ez connect true`). Imported profiles persist in app-private storage and
-  reload at launch.
+- **Profile import**: in-app **IMPORT QR** opens a source choice — camera scan
+  (zxing-android-embedded, offered when the device has a camera) or an image
+  file (document picker → ZXing decode → config parse). The base64 intent
+  extra (`conf_b64`, + optional `--ez connect true`) remains the automation
+  path. Imported profiles persist in app-private storage and reload at launch.
 - **Always-on / kill switch**: profiles persist in app-private storage;
   `OrionApp` registers `GoBackend.setAlwaysOnCallback`, so when Android starts
   the service in always-on mode (boot, network change) the tunnel reconnects
@@ -94,6 +95,8 @@ sits in app-private storage (`files/orion.conf`), reachable only by the app uid.
   Orbot-style proxy chaining — future work).
 - The kill switch is the **system lockdown toggle** (armed by the user via the
   deep link); the app cannot arm it programmatically with public APIs.
-- No camera scan (image-file QR only) — camera scanning wants
-  zxing-android-embedded + a live camera, next round if wanted.
+- No camera scan on devices without a camera (the dialog hides the option);
+  image-file QR stays as the desktop-generated-QR path. Camera decode verified
+  to the live feed on the emulator (virtual scene); full decode e2e was done
+  through the image-file path (same ZXing pipeline).
 - iOS has no client.
