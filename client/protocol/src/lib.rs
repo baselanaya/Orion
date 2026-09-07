@@ -6,7 +6,6 @@
 //! the UI is unprivileged, the helper owns the kernel state.
 
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixStream;
 
 use serde::{Deserialize, Serialize};
 
@@ -97,24 +96,41 @@ impl std::fmt::Display for IpcError {
 
 impl std::error::Error for IpcError {}
 
+#[cfg(unix)]
 pub fn call(req: &Request) -> Result<Response, IpcError> {
-    call_at(DEFAULT_SOCKET_PATH, req)
+    unix_transport::call_at(DEFAULT_SOCKET_PATH, req)
 }
 
-pub fn call_at(path: &str, req: &Request) -> Result<Response, IpcError> {
-    let mut stream = UnixStream::connect(path).map_err(IpcError::Io)?;
-    let mut line = serde_json::to_string(req).map_err(IpcError::Json)?;
-    line.push('\n');
-    stream.write_all(line.as_bytes()).map_err(IpcError::Io)?;
-    stream.flush().map_err(IpcError::Io)?;
+#[cfg(unix)]
+pub use unix_transport::call_at;
 
-    let mut reader = BufReader::new(stream);
-    let mut buf = String::new();
-    let n = reader.read_line(&mut buf).map_err(IpcError::Io)?;
-    if n == 0 {
-        return Err(IpcError::ServerClosed);
+#[cfg(unix)]
+mod unix_transport {
+    use super::*;
+    use std::os::unix::net::UnixStream;
+
+    pub fn call_at(path: &str, req: &Request) -> Result<Response, IpcError> {
+        let mut stream = UnixStream::connect(path).map_err(IpcError::Io)?;
+        let mut line = serde_json::to_string(req).map_err(IpcError::Json)?;
+        line.push('\n');
+        stream.write_all(line.as_bytes()).map_err(IpcError::Io)?;
+        stream.flush().map_err(IpcError::Io)?;
+
+        let mut reader = BufReader::new(stream);
+        let mut buf = String::new();
+        let n = reader.read_line(&mut buf).map_err(IpcError::Io)?;
+        if n == 0 {
+            return Err(IpcError::ServerClosed);
+        }
+        serde_json::from_str(buf.trim()).map_err(IpcError::Json)
     }
-    serde_json::from_str(buf.trim()).map_err(IpcError::Json)
+}
+
+#[cfg(not(unix))]
+pub fn call(_req: &Request) -> Result<Response, IpcError> {
+    Err(IpcError::Json(serde_json::Error::custom(
+        "helper IPC is Linux-only in this build (named-pipe transport: roadmap)",
+    )))
 }
 
 #[cfg(test)]
