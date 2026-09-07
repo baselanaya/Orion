@@ -28,6 +28,8 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+          NO_STRIP: '1'
         with:
           projectPath: client/app
           tauriScript: npx --yes @tauri-apps/cli@2
