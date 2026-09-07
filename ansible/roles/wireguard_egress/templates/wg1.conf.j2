@@ -1,0 +1,13 @@
+[Interface]
+# {{ ansible_managed }} — mobile/standard-WireGuard listener (plan roadmap: mobile)
+# Plain WireGuard for phones and devices without the AmneziaWG client.
+Address = 10.66.2.1/24
+ListenPort = 51820
+PrivateKey = {{ orion_wg1_private_key }}
+MTU = 1420
+{% for p in orion_wg1_peers %}
+# peer: {{ p.name }} ({{ p.device | default('mobile') }})
+[Peer]
+PublicKey = {{ p.pubkey }}
+AllowedIPs = {{ p.ip }}/32
+{% endfor %}

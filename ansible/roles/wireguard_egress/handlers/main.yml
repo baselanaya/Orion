@@ -4,6 +4,11 @@
     name: orion-awg
     state: restarted
 
+- name: restart wg1
+  ansible.builtin.systemd:
+    name: orion-wg1
+    state: restarted
+
 - name: restart wg-hop
   ansible.builtin.systemd:
     name: wg-quick@wg-hop

@@ -140,6 +140,48 @@
     state: stopped
   failed_when: false
 
+- name: Generate the mobile listener (wg1) server key
+  ansible.builtin.shell: "umask 077 && wg genkey > /etc/wireguard/wg1.key"
+  args:
+    creates: /etc/wireguard/wg1.key
+  no_log: true
+
+- name: Read the wg1 server key
+  ansible.builtin.slurp:
+    src: /etc/wireguard/wg1.key
+  register: wg1_key_b64
+  no_log: true
+
+- name: Set the wg1 private key fact
+  ansible.builtin.set_fact:
+    orion_wg1_private_key: "{{ wg1_key_b64.content | b64decode | trim }}"
+  no_log: true
+
+- name: Install the mobile listener configuration (wg1)
+  ansible.builtin.template:
+    src: wg1.conf.j2
+    dest: /etc/wireguard/wg1.conf
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart wg1
+
+- name: Install the mobile listener systemd unit
+  ansible.builtin.template:
+    src: orion-wg1.service.j2
+    dest: /etc/systemd/system/orion-wg1.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart wg1
+
+- name: Enable the mobile listener at boot
+  ansible.builtin.systemd:
+    name: orion-wg1
+    enabled: true
+    state: started
+    daemon_reload: true
+
 - name: Install awg0 configuration (obfuscated)
   ansible.builtin.template:
     src: awg0.conf.j2

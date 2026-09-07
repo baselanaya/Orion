@@ -21,6 +21,9 @@ orion_hop_peer_ip: "10.66.255.1/32"
 orion_hop_fast: "10.66.1.10-10.66.1.49"
 orion_hop_double: "10.66.1.50-10.66.1.89"
 orion_hop_ghost: "10.66.1.90-10.66.1.129"
+# mobile plain-WireGuard listener pool (10.66.2.0/24)
+orion_wg1_pool: "10.66.2.10-10.66.2.49"
+
 # supplied per-host from host_vars (generated once, gitignored):
 #   orion_hop_private_key  - this node's hop key
 #   orion_hop_peer_pub     - the entry node's hop public key

@@ -133,6 +133,21 @@ docs/           system design, phase runbooks, design spec, review
 scripts/        onboarding, peer keys, node update, uninstall, validation
 ```
 
+## Mobile (Android / iOS)
+
+The node runs a plain-WireGuard listener (port 51820/UDP) for phones —
+handshake-compatible with the standard WireGuard and AmneziaWG mobile apps.
+
+```bash
+scripts/new-mobile-peer.sh <peer-name>     # prints keys + the peer snippet
+scripts/node-update.sh                     # applies the new peer to the node
+scripts/mobile-qr.sh <profile.conf>        # scannable QR for the phone
+```
+
+Ghost-mode obfuscation on mobile needs the AWG-capable client (AmneziaWG app)
+or the planned Orion Android app; over mobile networks, plain WireGuard
+handshakes are typically unfiltered (unlike some home ISPs).
+
 ## Upkeep
 
 ```bash

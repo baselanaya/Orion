@@ -42,6 +42,12 @@ table inet orion_fw {
     flags interval
     elements = { {{ orion_hop_ghost }} }
   }
+  # mobile/standard-WireGuard clients (wg1 listener, 10.66.2.0/24)
+  set wg1_pool {
+    type ipv4_addr
+    flags interval
+    elements = { {{ orion_wg1_pool }} }
+  }
 
   chain input {
     type filter hook input priority filter; policy drop;
@@ -59,6 +65,7 @@ table inet orion_fw {
 {% endif %}
     udp dport {{ orion_wg_port }} accept comment "WireGuard"
     udp dport {{ orion_hop_port }} accept comment "entry<->egress hop"
+    udp dport 51820 accept comment "mobile plain-WG listener"
     # Ghost peers reach the Tor client only (their TCP/DNS is redirected to
     # these ports in the prerouting chain below — plan §5.3)
     iifname "{{ orion_wg_iface }}" ip saddr @ghost_pool tcp dport 9040 accept
@@ -88,6 +95,10 @@ table inet orion_fw {
     iifname "wg-hop" oifname "{{ orion_wan_interface }}" ip saddr @hop_double udp dport != 443 accept
     iifname "wg-hop" oifname "{{ orion_wan_interface }}" ip saddr @hop_double ip protocol icmp accept
     # hop_ghost: no accepts — prerouting redirects feed Tor; the rest drops.
+    # mobile plain-WG clients: direct NAT (QUIC + IPv6 dropped like the rest)
+    iifname "wg1" oifname "{{ orion_wan_interface }}" ip saddr @wg1_pool meta l4proto tcp accept
+    iifname "wg1" oifname "{{ orion_wan_interface }}" ip saddr @wg1_pool udp dport != 443 accept
+    iifname "wg1" oifname "{{ orion_wan_interface }}" ip saddr @wg1_pool ip protocol icmp accept
   }
 
   chain postrouting {
@@ -95,6 +106,7 @@ table inet orion_fw {
     ip saddr @fast_pool oifname "{{ orion_wan_interface }}" masquerade
     ip saddr @hop_fast oifname "{{ orion_wan_interface }}" masquerade
     ip saddr @hop_double oifname "{{ orion_wan_interface }}" masquerade
+    ip saddr @wg1_pool oifname "{{ orion_wan_interface }}" masquerade
   }
 
   chain prerouting {
