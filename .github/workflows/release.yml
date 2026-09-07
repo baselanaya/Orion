@@ -33,6 +33,7 @@ jobs:
         with:
           projectPath: client/app
           tauriScript: npx --yes @tauri-apps/cli@2
+          args: --bundles deb
           tagName: ${{ github.ref_name }}
           releaseName: Orion ${{ github.ref_name }}
           releaseBody: |
