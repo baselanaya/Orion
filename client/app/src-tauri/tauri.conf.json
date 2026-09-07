@@ -17,7 +17,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src 'self' ipc: http://ipc.localhost https:; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
@@ -29,6 +29,7 @@
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
+      "icons/256x256.png",
       "icons/icon.png"
     ],
     "linux": {

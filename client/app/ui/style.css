@@ -272,6 +272,24 @@ button { touch-action: manipulation; }
 }
 .toggle-row input { accent-color: var(--blue); width: 14px; height: 14px; }
 
+.ghost-actions { display: flex; gap: 8px; margin-top: 12px; }
+.mini {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font: 500 11px/1 "Hanken Grotesk", sans-serif;
+  padding: 9px 6px;
+  cursor: pointer;
+}
+.mini:hover { border-color: var(--ash); }
+.mini:active { transform: scale(0.98); }
+.mini .ic { width: 11px; height: 11px; }
+
 @media (prefers-reduced-motion: reduce) {
   .ring.is-linking { animation: none; }
   .power:active { transform: none; }

@@ -286,6 +286,8 @@ function render() {
     (phase === "standby" && !selected);
   const nb = $("newIdBtn");
   if (nb) nb.hidden = !(phase === "ghost");
+  const ga = $("ghostActions");
+  if (ga) ga.hidden = !(phase === "ghost");
   $("headline").textContent = HEADLINES[phase];
   $("subline").textContent = SUBS[phase];
 
@@ -493,6 +495,48 @@ $("copyExit").onclick = () => {
 };
 
 addEventListener("resize", () => map.resize());
+
+/* ------------------------------------------------ tray + roadmap 5 */
+if (window.__TAURI__ && window.__TAURI__.event) {
+  const { listen } = window.__TAURI__.event;
+  listen("tray-toggle", () => $("actionBtn").click());
+  listen("tray-new-id", () => { if (!$("newIdBtn").hidden) $("newIdBtn").click(); });
+}
+
+$("tbBtn").onclick = async () => {
+  try {
+    const r = await invoke("detect_tor_browser");
+    if (r.path) {
+      await window.__TAURI__.opener.openPath(r.path);
+      $("subline").textContent = "Tor Browser launched: its own Tor rides our Ghost tunnel.";
+    } else {
+      $("subline").textContent = "Tor Browser not found - install torbrowser-launcher.";
+    }
+  } catch (e) { $("subline").textContent = String(e); }
+};
+
+$("aliasBtn").onclick = async () => {
+  const key = localStorage.getItem("orion.slKey");
+  if (!key) { $("subline").textContent = "set a SimpleLogin API key in Settings first."; return; }
+  try {
+    const r = await fetch("https://app.simplelogin.io/api/alias/random/new?hostname=orion", {
+      method: "POST",
+      headers: { Authentication: key },
+      signal: AbortSignal.timeout(10000),
+    });
+    const j = await r.json();
+    if (j.alias) {
+      await navigator.clipboard.writeText(j.alias);
+      $("subline").textContent = "alias created + copied: " + j.alias;
+    } else {
+      $("subline").textContent = "alias error: " + (j.error || "unknown");
+    }
+  } catch (e) { $("subline").textContent = "alias error: " + e; }
+};
+
+const slKey = $("slKey");
+slKey.value = localStorage.getItem("orion.slKey") || "";
+slKey.onchange = () => localStorage.setItem("orion.slKey", slKey.value.trim());
 
 /* ------------------------------------------------ boot */
 const worldImg = new Image();

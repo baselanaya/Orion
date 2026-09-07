@@ -61,12 +61,16 @@ fn main() {
             let _guard = APP_LOCK.lock().unwrap();
             println!("{}", serde_json::to_string_pretty(&status()).unwrap());
         }
+        "launch-tor-browser" => {
+            let _guard = APP_LOCK.lock().unwrap();
+            launch_tor_browser();
+        }
         "unlock" => {
             let _guard = APP_LOCK.lock().unwrap();
             unlock();
         }
         _other => {
-            eprintln!("usage: orion-helper [serve|status|unlock]");
+            eprintln!("usage: orion-helper [serve|status|launch-tor-browser|unlock]");
             std::process::exit(2);
         }
     }
@@ -146,6 +150,18 @@ fn dispatch(req: &Request) -> Response {
             eprintln!("[orion-helper] new identity (NEWNYM)");
             let r = new_identity_req();
             eprintln!("[orion-helper] new identity -> {r:?}");
+            r
+        }
+        Request::LaunchTorBrowser => {
+            let r = match launch_tor_browser() {
+                Ok(Some(path)) => Response::Status {
+                    state: "launched".into(), profile: None, endpoint: None,
+                    handshake_age_secs: None, rx_bytes: None, tx_bytes: None,
+                    detail: Some(path),
+                },
+                Err(e) => Response::Err { message: e },
+                _ => Response::Err { message: "no tor browser found".into() },
+            };
             r
         }
     }
@@ -530,6 +546,57 @@ fn new_identity_req() -> Response {
     Response::Ok
 }
 
+/// Find a Tor Browser installation and hand its starter to the caller's
+/// desktop session. Runs as root, so we drop back to uid 1000 for the launch.
+fn launch_tor_browser() -> Result<Option<String>, String> {
+    let candidates = [
+        "/usr/bin/torbrowser-launcher",
+        "/usr/local/bin/torbrowser-launcher",
+    ];
+    let mut found: Option<String> = candidates
+        .iter()
+        .find(|p| std::path::Path::new(p).exists())
+        .map(|p| p.to_string());
+    if found.is_none() {
+        // home installs: /home/<user>/tor-browser/Browser/start-tor-browser
+        if let Ok(entries) = std::fs::read_dir("/home") {
+            for e in entries.flatten() {
+                let cand = e.path().join("tor-browser/Browser/start-tor-browser");
+                if cand.exists() {
+                    found = Some(cand.to_string_lossy().into_owned());
+                    break;
+                }
+            }
+        }
+    }
+    let path = found.ok_or_else(|| "no tor browser found; install torbrowser-launcher".to_string())?;
+    // the starter script must run as the DESKTOP user, not root
+    let user = std::process::Command::new("id")
+        .args(["-nu", "1000"])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "user".into());
+    let home = home_of(&user);
+    std::process::Command::new("sudo")
+        .args(["-u", &user, "env", &format!("HOME={home}"), &path])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("launch: {e}"))?;
+    Ok(Some(path))
+}
+
+fn home_of(user: &str) -> String {
+    std::process::Command::new("getent")
+        .args(["passwd", user])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .and_then(|s| s.split(':').nth(5).map(|h| h.trim().to_string()))
+        .unwrap_or_else(|| format!("/home/{user}"))
+}
 fn unlock() {
     bring_down_tunnel();
     remove_lock();

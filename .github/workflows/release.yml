@@ -1,0 +1,66 @@
+name: release
+
+# Build installers for every OS on version tags. Linux artifacts are published
+# to the GitHub release; Windows/macOS bundles are attached as workflow
+# artifacts (the helper's kill-switch is Linux-only today — see docs/phase-4
+# and README roadmap).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: tauri linux prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: "client" }
+      - run: cd client && cargo build --release -p orion-helper
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: client/app
+          tauriScript: npx --yes @tauri-apps/cli@2
+          tagName: ${{ github.ref_name }}
+          releaseName: Orion ${{ github.ref_name }}
+          releaseBody: |
+            Self-hosted privacy VPN — obfuscated AmneziaWG tunnel, Tor-enforced Ghost mode, fail-closed kill switch.
+
+            - `.deb` — Debian/Ubuntu: `sudo apt install ./orion_..._amd64.deb`, then `scripts/onboard.sh` from the repo to provision a node.
+            - `.AppImage` — portable Linux build.
+          releaseDraft: false
+          prerelease: false
+
+  windows-macos-shell:
+    strategy:
+      matrix:
+        include:
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { os: macos-latest, target: aarch64-apple-darwin }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: "client" }
+      - name: build app shell (UI preview; helper/tunnel is Linux-only today)
+        run: |
+          cd client
+          cargo build --release -p orion-app --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orion-${{ matrix.os }}
+          path: client/target/*/release/orion-app*
+          if-no-files-found: ignore

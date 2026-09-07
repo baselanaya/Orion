@@ -39,6 +39,14 @@
         <h1 class="headline" id="headline" aria-live="polite">You're unprotected</h1>
         <p class="subline" id="subline" aria-live="polite">Your traffic exits through your home IP.</p>
         <button class="newid" id="newIdBtn" hidden title="rotate Tor circuits">NEW IDENTITY</button>
+        <div class="ghost-actions" id="ghostActions" hidden>
+          <button class="mini" id="tbBtn" title="launch Tor Browser (its own Tor rides our tunnel)">
+            <img class="ic" src="icons/globe-simple.svg" alt="" />Tor Browser
+          </button>
+          <button class="mini" id="aliasBtn" title="create a SimpleLogin alias (needs an API key in Settings)">
+            <img class="ic" src="icons/copy.svg" alt="" />New alias
+          </button>
+        </div>
       </div>
 
       <div class="hud mono">
@@ -77,6 +85,9 @@
         <input type="checkbox" id="autoStart" />
         <span>Connect automatically when Orion starts</span>
       </label>
+      <div class="modal-body" style="margin-top: 8px">
+        <div><span>simplelogin key</span><input type="password" id="slKey" placeholder="paste API key" style="background: var(--void); border: 1px solid var(--line); color: var(--ink); font: 11px 'IBM Plex Mono'; padding: 4px 6px; width: 150px" /></div>
+      </div>
         <label class="toggle-row">
           <input type="checkbox" id="newnymOnConnect" />
           <span>Rotate Tor circuits on every Ghost connect</span>

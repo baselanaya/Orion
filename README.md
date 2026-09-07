@@ -140,9 +140,12 @@ scripts/uninstall-client.sh     # remove the client (profiles kept; --purge remo
 
 - [x] Obfuscated single-node VPN (Fast) + Tor Ghost mode
 - [x] Fail-closed kill switch + NEW ID (circuit rotation)
+- [x] System tray (menu: connect, NEW ID, quit; close-to-tray)
+- [x] Tor Browser launcher from Ghost mode (its own Tor rides our tunnel)
+- [x] SimpleLogin alias creation (API key in Settings; built through the tunnel)
+- [x] Windows/macOS app bundles via CI (tunnel control is Linux-first today)
 - [ ] Entry-node chaining (double hop) — role built, awaiting hardware
-- [ ] Tray mode, Tor Browser integration, per-identity aliases
-- [ ] macOS / Windows clients
+- [ ] Native Windows/macOS helper (per-OS kill switch: WFP / Network Extension)
 
 ## License
 

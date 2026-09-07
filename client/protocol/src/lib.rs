@@ -39,6 +39,8 @@ pub enum Request {
     Disconnect,
     /// Signal NEWNYM on the node's Tor control port (Ghost "new identity").
     NewIdentity,
+    /// Locate and launch a Tor Browser installation for the desktop user.
+    LaunchTorBrowser,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
