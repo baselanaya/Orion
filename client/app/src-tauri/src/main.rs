@@ -51,40 +51,52 @@ fn main() {
             launch_tor_browser
         ])
         .setup(|app| {
-            // system tray: closed window keeps Orion running in the background
-            use tauri::menu::{MenuBuilder, MenuItemBuilder};
-            use tauri::tray::TrayIconBuilder;
+            // system tray: closed window keeps Orion running in the background.
+            // The tray-icon crate panics (it does not return Err) when no
+            // appindicator library is present — e.g. on CI runners — so the
+            // whole setup is catch_unwind-guarded and degrades gracefully.
+            let tray_setup = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> tauri::Result<()> {
+                use tauri::menu::{MenuBuilder, MenuItemBuilder};
+                use tauri::tray::TrayIconBuilder;
 
-            let show = MenuItemBuilder::with_id("show", "Show Orion").build(app)?;
-            let toggle = MenuItemBuilder::with_id("toggle", "Connect / Disconnect").build(app)?;
-            let newid = MenuItemBuilder::with_id("newid", "New identity (Ghost)").build(app)?;
-            let sep = tauri::menu::PredefinedMenuItem::separator(app)?;
-            let quit = MenuItemBuilder::with_id("quit", "Quit Orion").build(app)?;
-            let menu = MenuBuilder::new(app).items(&[&show, &toggle, &newid, &sep, &quit]).build()?;
+                let show = MenuItemBuilder::with_id("show", "Show Orion").build(app)?;
+                let toggle = MenuItemBuilder::with_id("toggle", "Connect / Disconnect").build(app)?;
+                let newid = MenuItemBuilder::with_id("newid", "New identity (Ghost)").build(app)?;
+                let sep = tauri::menu::PredefinedMenuItem::separator(app)?;
+                let quit = MenuItemBuilder::with_id("quit", "Quit Orion").build(app)?;
+                let menu = MenuBuilder::new(app).items(&[&show, &toggle, &newid, &sep, &quit]).build()?;
 
-            let _tray = TrayIconBuilder::with_id("orion-tray")
-                .icon(tauri::include_image!("icons/32x32.png"))
-                .tooltip("Orion")
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id().as_ref() {
-                    "show" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
+                TrayIconBuilder::with_id("orion-tray")
+                    .icon(tauri::include_image!("icons/32x32.png"))
+                    .tooltip("Orion")
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id().as_ref() {
+                        "show" => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
                         }
-                    }
-                    "toggle" => {
-                        let _ = app.emit("tray-toggle", ());
-                    }
-                    "newid" => {
-                        let _ = app.emit("tray-new-id", ());
-                    }
-                    "quit" => app.exit(0),
-                    _ => {}
-                })
-                .build(app);
-            // tray is a convenience: never fail the app over it
+                        "toggle" => {
+                            let _ = app.emit("tray-toggle", ());
+                        }
+                        "newid" => {
+                            let _ = app.emit("tray-new-id", ());
+                        }
+                        "quit" => app.exit(0),
+                        _ => {}
+                    })
+                    .build(app).map(|_| ())
+            }));
+            match tray_setup {
+                Err(panic_payload) => {
+                    eprintln!("[orion] system tray setup panicked; continuing without it");
+                    let _ = panic_payload;
+                }
+                Ok(Err(e)) => eprintln!("[orion] tray setup error: {e}"),
+                Ok(Ok(())) => {}
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
