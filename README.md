@@ -3,7 +3,6 @@
 [![ci](https://github.com/baselanaya/Orion/actions/workflows/ci.yml/badge.svg)](https://github.com/baselanaya/Orion/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-<img src="brand/orion-logo-512.png" width="120" alt="Orion logo" />
 
 # ORION
 
@@ -120,6 +119,9 @@ public key for your client profile. Full runbook:
    sees public keys) — `scripts/new-peer.sh`, then place the conf at
    `/etc/orion/profiles/<name>.conf`.
 2. Launch **Orion** from your app menu. Select a server, press connect.
+
+<img src="docs/screenshots/main-window.png" alt="Orion main window" width="620" />
+
 3. `sudo orion-helper unlock` is the documented emergency exit.
 
 ## Repository layout
