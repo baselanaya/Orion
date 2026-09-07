@@ -62,6 +62,11 @@ CTX = {
         {"name": "laptop", "mode": "fast", "ip": "10.66.0.10", "pubkey": "PUBKEYx" * 8},
     ],
     "orion_server_private_key": "PRIVKEYx" * 6,
+    "orion_wg1_private_key": "W1PRIVx" * 6,
+    "orion_wg1_pool": "10.66.2.10-10.66.2.49",
+    "orion_wg1_peers": [
+        {"name": "mobile", "ip": "10.66.2.11", "pubkey": "MOBPUBx" * 8},
+    ],
 }
 
 
