@@ -82,6 +82,9 @@ pub enum IpcError {
     Io(std::io::Error),
     Json(serde_json::Error),
     ServerClosed,
+    /// The IPC transport does not exist on this platform
+    /// (the root helper itself is Linux-only today).
+    Unsupported(&'static str),
 }
 
 impl std::fmt::Display for IpcError {
@@ -90,6 +93,7 @@ impl std::fmt::Display for IpcError {
             IpcError::Io(e) => write!(f, "helper socket: {e} (is orion-helper running?)"),
             IpcError::Json(e) => write!(f, "protocol error: {e}"),
             IpcError::ServerClosed => write!(f, "helper closed the connection"),
+            IpcError::Unsupported(msg) => write!(f, "{msg}"),
         }
     }
 }
@@ -128,9 +132,9 @@ mod unix_transport {
 
 #[cfg(not(unix))]
 pub fn call(_req: &Request) -> Result<Response, IpcError> {
-    Err(IpcError::Json(serde_json::Error::custom(
-        "helper IPC is Linux-only in this build (named-pipe transport: roadmap)",
-    )))
+    Err(IpcError::Unsupported(
+        "helper IPC is Linux-only in this build",
+    ))
 }
 
 #[cfg(test)]
